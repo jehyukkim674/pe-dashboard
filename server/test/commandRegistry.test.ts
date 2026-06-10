@@ -67,4 +67,16 @@ describe('CommandRegistry', () => {
       registry.register({ id: 'bad id!', description: '', argv: ['x'], params: [] }),
     ).rejects.toThrow(/invalid/);
   });
+
+  it('rejects option injection on path-style params too', () => {
+    expect(() => registry.buildArgv('git_log', { repoPath: '--work-tree=/etc' })).toThrow(/invalid/);
+  });
+
+  it('rejects registration when argv placeholder is not declared in params', async () => {
+    await expect(
+      registry.register({
+        id: 'bad_tpl', description: 'x', argv: ['kubectl', 'get', '{thing}'], params: [],
+      }),
+    ).rejects.toThrow(/undeclared placeholder/);
+  });
 });

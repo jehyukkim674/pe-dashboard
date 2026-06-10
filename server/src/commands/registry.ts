@@ -48,6 +48,8 @@ const BUILTIN: CommandTemplate[] = [
   },
 ];
 
+// 주의: 이 정규식은 선행 대시(--flag)를 막지 못한다. 옵션 주입 방어는
+// buildArgv의 value.startsWith('-') 검사가 담당하므로 둘을 함께 유지해야 한다.
 const PARAM_VALUE_RE = /^[\w@.:/\\,= -]+$/;
 
 export class CommandRegistry {
@@ -78,6 +80,14 @@ export class CommandRegistry {
       throw new Error('argv must be a non-empty array');
     }
     if (this.get(template.id)) throw new Error(`template already exists: ${template.id}`);
+    const placeholders = [...new Set(
+      template.argv.flatMap((part) => [...part.matchAll(/\{(\w+)\}/g)].map((m) => m[1])),
+    )];
+    const declared = new Set(template.params);
+    const undeclared = placeholders.filter((p) => !declared.has(p));
+    if (undeclared.length > 0) {
+      throw new Error(`undeclared placeholder in argv: ${undeclared.join(', ')}`);
+    }
     this.custom.push({ ...template, builtin: false });
     const tmp = `${this.customFile}.tmp`;
     await fs.writeFile(tmp, JSON.stringify(this.custom, null, 2));
