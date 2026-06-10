@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Drawer, Input, Space, Tag, Typography, message as antdMessage } from 'antd';
 import { CheckOutlined, CloseOutlined, SendOutlined, ToolOutlined } from '@ant-design/icons';
 import { api, streamChat } from '../api';
@@ -24,17 +24,24 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged }: Props
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const push = (item: Item) => {
     setItems((prev) => [...prev, item]);
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
   };
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [items.length]);
 
   const send = async () => {
     const text = input.trim();
     if (!text || busy) return;
     setInput('');
     push({ kind: 'user', text });
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
     setBusy(true);
     try {
       await streamChat(SESSION_ID, text, (e: ChatEvent) => {
@@ -47,9 +54,11 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged }: Props
           push({ kind: 'confirm', pendingId: e.pendingId, command: e.command });
         }
         if (e.type === 'error') push({ kind: 'error', text: e.message });
-      });
+      }, ac.signal);
     } catch (e) {
-      push({ kind: 'error', text: (e as Error).message });
+      if ((e as Error).name !== 'AbortError') {
+        push({ kind: 'error', text: (e as Error).message });
+      }
     } finally {
       setBusy(false);
     }
