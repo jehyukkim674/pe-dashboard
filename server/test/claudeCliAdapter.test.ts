@@ -50,6 +50,10 @@ describe('extractJson', () => {
   it('throws when no JSON object found', () => {
     expect(() => extractJson('그냥 텍스트')).toThrow(/JSON/);
   });
+  it('parses JSON even when prose before it contains braces', () => {
+    const text = '포맷 {op: ...} 예시는 이렇다: {"reply":"진짜","operations":[]}';
+    expect(extractJson(text).reply).toBe('진짜');
+  });
 });
 
 describe('ClaudeCliAdapter', () => {
@@ -93,6 +97,20 @@ describe('ClaudeCliAdapter', () => {
     await adapter.chat('s1', '테스트', emit);
     const error = events.find((e) => e.type === 'error');
     expect(error && error.message).toMatch(/파싱 실패/);
+  });
+
+  it('evicts oldest history beyond 10 turns', async () => {
+    const responses = Array.from({ length: 12 }, (_, i) =>
+      envelope(`{"reply":"답${i}","operations":[]}`),
+    );
+    const { adapter, calls } = await makeAdapter(responses);
+    const { emit } = collect();
+    for (let i = 0; i < 12; i++) {
+      await adapter.chat('s1', `질문${i}`, emit);
+    }
+    const lastPrompt = calls[11][calls[11].indexOf('-p') + 1];
+    expect(lastPrompt).not.toContain('질문0');
+    expect(lastPrompt).toContain('질문10');
   });
 
   it('includes recent history in the next prompt', async () => {

@@ -8,6 +8,7 @@ import { applyOperations, type Operation } from './operations.js';
 
 const CLI_TIMEOUT_MS = 120_000;
 const MAX_HISTORY_TURNS = 10;
+const MAX_SESSIONS = 20;
 
 type Exec = (argv: string[], timeoutMs?: number) => Promise<CommandResult>;
 
@@ -69,6 +70,12 @@ export class ClaudeCliAdapter implements ChatAdapter {
     turns.push({ user, reply });
     while (turns.length > MAX_HISTORY_TURNS) turns.shift();
     this.history.set(sessionId, turns);
+    // 오래된 세션부터 제거 (Map은 삽입 순서 유지)
+    while (this.history.size > MAX_SESSIONS) {
+      const oldest = this.history.keys().next().value;
+      if (oldest === undefined) break;
+      this.history.delete(oldest);
+    }
   }
 
   private async buildPrompt(sessionId: string, userMessage: string): Promise<string> {
@@ -106,12 +113,22 @@ export class ClaudeCliAdapter implements ChatAdapter {
   }
 }
 
-// 코드펜스(```json ... ```)나 앞뒤 잡설이 섞여 있어도 첫 '{'~마지막 '}' 구간을 파싱한다.
+// 코드펜스(```json ... ```)나 앞뒤 잡설이 섞여 있어도 JSON 객체를 찾아 파싱한다.
+// 잡설에 '{'가 섞인 경우를 대비해, 각 '{' 후보 위치에서 마지막 '}'까지 파싱을 시도한다.
 export function extractJson(text: string): { reply?: string; operations?: Operation[] } {
   const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
   const candidate = fenced ? fenced[1] : text;
-  const start = candidate.indexOf('{');
   const end = candidate.lastIndexOf('}');
-  if (start < 0 || end <= start) throw new Error('JSON 객체를 찾지 못했습니다');
-  return JSON.parse(candidate.slice(start, end + 1)) as { reply?: string; operations?: Operation[] };
+  let start = candidate.indexOf('{');
+  while (start >= 0 && start < end) {
+    try {
+      return JSON.parse(candidate.slice(start, end + 1)) as {
+        reply?: string;
+        operations?: Operation[];
+      };
+    } catch {
+      start = candidate.indexOf('{', start + 1);
+    }
+  }
+  throw new Error('JSON 객체를 찾지 못했습니다');
 }
