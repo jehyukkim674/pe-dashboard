@@ -119,7 +119,8 @@ type UpdateCheck =
 ```
 
 - electron-updater(`autoUpdater`) 사용, 피드는 GitHub Releases
-  (electron-builder `publish: github`, `latest-mac.yml` + zip/dmg 아티팩트).
+  (electron-builder `publish: github`, `latest-mac.yml` + zip 아티팩트.
+  dmg는 이 머신의 hdiutil 이슈로 제외 — zip만으로 자동 업데이트 충분).
 - `install(onProgress)`: `download-progress` 이벤트로 0~99%,
   `update-downloaded`에서 **100%** 콜백 후 `quitAndInstall()` → 재시작.
 - 앱 시작 5초 후 자동 체크(조용히) + 메뉴/단축키로 수동 체크.
