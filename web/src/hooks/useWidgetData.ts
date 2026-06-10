@@ -10,8 +10,11 @@ export function useWidgetData(dataSource?: WidgetDataSource) {
   useEffect(() => {
     if (!dataSource) return;
     let alive = true;
-    const load = async () => {
-      setLoading(true);
+    let inFlight = false;
+    const load = async (isBackground: boolean) => {
+      if (inFlight) return; // 이전 호출이 끝나기 전 새 폴링 금지 (느린 명령 시 결과 역전 방지)
+      inFlight = true;
+      if (!isBackground) setLoading(true);
       try {
         const r = await api.widgetData(dataSource);
         if (alive) setResult(r);
@@ -22,12 +25,13 @@ export function useWidgetData(dataSource?: WidgetDataSource) {
           });
         }
       } finally {
-        if (alive) setLoading(false);
+        inFlight = false;
+        if (alive && !isBackground) setLoading(false);
       }
     };
-    void load();
+    void load(false);
     const timer = dataSource.refreshSec
-      ? setInterval(load, dataSource.refreshSec * 1000)
+      ? setInterval(() => void load(true), dataSource.refreshSec * 1000)
       : undefined;
     return () => {
       alive = false;

@@ -6,7 +6,11 @@ export default function TableWidget({ result, display }: {
   display?: Record<string, unknown>;
 }) {
   const rows = Array.isArray(result?.json) ? (result.json as Record<string, unknown>[]) : [];
-  const columns = (display?.columns as string[] | undefined) ?? Object.keys(rows[0] ?? {});
+  const rawCols = display?.columns;
+  const columns: string[] =
+    Array.isArray(rawCols) && rawCols.every((c) => typeof c === 'string')
+      ? (rawCols as string[])
+      : Object.keys(rows[0] ?? {});
   return (
     <Table
       size="small" pagination={false}

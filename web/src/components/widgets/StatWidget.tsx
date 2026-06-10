@@ -23,5 +23,9 @@ export default function StatWidget({ result, display }: {
   } else if (result) {
     value = result.stdout.trim().split('\n')[0] || '—';
   }
-  return <Statistic value={String(value ?? '—')} suffix={d.suffix} />;
+  const text =
+    typeof value === 'object' && value !== null
+      ? JSON.stringify(value).slice(0, 30)
+      : String(value ?? '—');
+  return <Statistic value={text} suffix={d.suffix} />;
 }
