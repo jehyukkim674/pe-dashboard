@@ -1,5 +1,6 @@
 import net from 'node:net';
 import path from 'node:path';
+import { promises as fs } from 'node:fs';
 import Anthropic from '@anthropic-ai/sdk';
 import fastifyStatic from '@fastify/static';
 import type { FastifyInstance } from 'fastify';
@@ -44,6 +45,9 @@ export async function startServer(
   const app = await buildApp({ store, commands, pending, dataSources, chatService });
 
   if (opts.staticDir) {
+    await fs.access(path.join(opts.staticDir, 'index.html')).catch(() => {
+      throw new Error(`staticDir에 index.html이 없습니다: ${opts.staticDir} — 웹 빌드(npm run build -w web)를 먼저 실행하세요`);
+    });
     await app.register(fastifyStatic, { root: opts.staticDir });
     app.setNotFoundHandler((req, reply) => {
       if (req.method === 'GET' && !req.url.startsWith('/api')) {

@@ -6,7 +6,7 @@ const DATA_DIR = path.resolve(process.cwd(), '../data');
 
 async function main(): Promise<void> {
   const { app, port } = await startServer({ dataDir: DATA_DIR, preferredPort: 5174 });
-  console.log(`PE Dashboard server: http://localhost:${port}`);
+  console.log(`PE Dashboard server: http://127.0.0.1:${port}`);
   console.log(`Data directory: ${DATA_DIR}`);
 
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {

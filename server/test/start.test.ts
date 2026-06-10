@@ -46,4 +46,11 @@ describe('startServer', () => {
     const api = await fetch(`http://127.0.0.1:${port}/api/nope`);
     expect(api.status).toBe(404); // API는 폴백 제외
   });
+
+  it('fails fast with a clear error when staticDir lacks index.html', async () => {
+    const emptyDir = await tmp();
+    await expect(
+      startServer({ dataDir: await tmp(), preferredPort: 0, staticDir: emptyDir }),
+    ).rejects.toThrow(/index\.html/);
+  });
 });
