@@ -1,5 +1,6 @@
 appId: com.gimjaehyeog.pe-dashboard
 productName: PE Dashboard
+artifactName: "PE-Dashboard-${version}-${arch}-mac.${ext}"
 directories:
   output: release
 files:

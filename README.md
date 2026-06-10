@@ -7,7 +7,7 @@ AI 채팅(오른쪽 drawer)으로 말하면 CLI 기반 위젯 대시보드를 �
 ```bash
 npm install
 npm run app:dev     # 개발: Electron 창 + HMR (server:5174, web:5173)
-npm run app:build   # 패키징: electron/release/ 에 .app/.dmg 생성
+npm run app:build   # 패키징: electron/release/ 에 .app/.zip 생성
 ```
 
 AI 채팅은 로컬 `claude` CLI(Claude Code)를 사용한다 — 별도 API 키 불필요.
@@ -24,7 +24,7 @@ Claude Code가 설치·로그인되어 있어야 한다. (API 모드로 쓰려�
 
 ```bash
 npm run app:dev    # Electron 개발 실행
-npm run app:build  # .app/.dmg 빌드
+npm run app:build  # .app/.zip 빌드
 npm run dev        # (웹 전용) server + web 브라우저 모드
 npm test           # 서버 단위 테스트
 npm run lint       # ESLint
@@ -35,7 +35,7 @@ npm run lint       # ESLint
 GitHub Releases(`latest-mac.yml` + zip) 기반. 앱 시작 5초 후 자동 확인,
 사이드바 '업데이트 확인'으로 수동 확인. 다운로드 진행률 100% 후 자동 재시작.
 릴리스 배포: electron/package.json 버전 올리고 `npm run app:build` 후 GitHub
-Release에 `electron/release/*.zip`, `*.dmg`, `latest-mac.yml` 업로드.
+Release에 `electron/release/*.zip`, `latest-mac.yml` 업로드.
 
 ## 확장 포인트
 
