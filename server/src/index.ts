@@ -30,6 +30,13 @@ async function main(): Promise<void> {
   const app = await buildApp({ store, commands, pending, dataSources, chatService });
   await app.listen({ port: PORT });
   console.log(`PE Dashboard server: http://localhost:${PORT}`);
+  console.log(`Data directory: ${DATA_DIR}`);
+
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    process.on(signal, () => {
+      void app.close().finally(() => process.exit(0));
+    });
+  }
 }
 
 main().catch((e) => {

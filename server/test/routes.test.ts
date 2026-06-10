@@ -82,6 +82,15 @@ describe('routes', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('POST /api/widget-data rejects malformed body with clear error', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/api/widget-data',
+      payload: { commandId: 'echo_hi' }, // kind 누락
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/kind/);
+  });
+
   it('pending command confirm registers template; reject discards', async () => {
     const template = { id: 'c1', description: 'd', argv: ['echo', 'x'], params: [] };
     const p1 = deps.pending.add(template);
