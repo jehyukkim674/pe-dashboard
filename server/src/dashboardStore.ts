@@ -17,11 +17,14 @@ export class DashboardStore {
 
   async list(): Promise<Dashboard[]> {
     const files = (await fs.readdir(this.dir)).filter((f) => f.endsWith('.json'));
-    const dashboards = await Promise.all(
+    const settled = await Promise.allSettled(
       files.map(async (f) =>
         JSON.parse(await fs.readFile(path.join(this.dir, f), 'utf8')) as Dashboard,
       ),
     );
+    const dashboards = settled
+      .filter((r): r is PromiseFulfilledResult<Dashboard> => r.status === 'fulfilled')
+      .map((r) => r.value);
     return dashboards.sort((a, b) => a.name.localeCompare(b.name));
   }
 
@@ -92,7 +95,7 @@ export class DashboardStore {
   // 원자적 쓰기: temp 파일에 쓴 뒤 rename
   private async write(dashboard: Dashboard): Promise<void> {
     const target = this.filePath(dashboard.id);
-    const tmp = `${target}.tmp`;
+    const tmp = `${target}.${randomUUID()}.tmp`;
     await fs.writeFile(tmp, JSON.stringify(dashboard, null, 2));
     await fs.rename(tmp, target);
   }

@@ -35,6 +35,12 @@ describe('DashboardStore', () => {
     expect(await store.delete(d.id)).toBe(false);
   });
 
+  it('save persists changes and survives reload', async () => {
+    const d = await store.create('old');
+    await store.save({ ...d, name: 'new' });
+    expect((await store.get(d.id))!.name).toBe('new');
+  });
+
   it('adds, updates and removes widgets', async () => {
     const d = await store.create('w');
     const widget = await store.addWidget(d.id, {
@@ -56,6 +62,12 @@ describe('DashboardStore', () => {
   it('throws when widget target is missing', async () => {
     const d = await store.create('x');
     await expect(store.updateWidget(d.id, 'nope', {})).rejects.toThrow(/widget not found/);
-    await expect(store.addWidget('no-dash', {} as never)).rejects.toThrow(/dashboard not found/);
+    await expect(
+      store.addWidget('no-dash', {
+        type: 'text',
+        title: 't',
+        layout: { x: 0, y: 0, w: 1, h: 1 },
+      }),
+    ).rejects.toThrow(/dashboard not found/);
   });
 });
