@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Button, Empty, Input, Layout, Menu, Modal, Typography, FloatButton } from 'antd';
+import { Button, Empty, Input, Layout, Menu, message, Modal, Typography, FloatButton } from 'antd';
 import { CommentOutlined, PlusOutlined } from '@ant-design/icons';
 import { api } from './api';
 import type { Dashboard } from './types';
@@ -12,6 +12,7 @@ export default function App() {
   const [chatOpen, setChatOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const refresh = useCallback(async (selectId?: string) => {
     const list = await api.listDashboards();
@@ -24,17 +25,24 @@ export default function App() {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void refresh();
+    void refresh().catch((e) => void message.error(`목록 조회 실패: ${(e as Error).message}`));
   }, [refresh]);
 
   const selected = dashboards.find((d) => d.id === selectedId);
 
   const createDashboard = async () => {
-    if (!newName.trim()) return;
-    const d = await api.createDashboard(newName.trim());
-    setCreating(false);
-    setNewName('');
-    await refresh(d.id);
+    if (!newName.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      const d = await api.createDashboard(newName.trim());
+      setCreating(false);
+      setNewName('');
+      await refresh(d.id);
+    } catch (e) {
+      void message.error(`대시보드 생성 실패: ${(e as Error).message}`);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -75,6 +83,7 @@ export default function App() {
       <Modal
         title="새 대시보드" open={creating} onOk={createDashboard}
         onCancel={() => setCreating(false)} okText="만들기" cancelText="취소"
+        confirmLoading={submitting}
       >
         <Input
           placeholder="이름 (예: 배포 현황)" value={newName} autoFocus

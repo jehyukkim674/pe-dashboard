@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { message } from 'antd';
 import RGL from 'react-grid-layout';
 import { api } from '../api';
 import type { Dashboard } from '../types';
@@ -24,7 +25,9 @@ export default function DashboardGrid({ dashboard, onChanged }: Props) {
   );
 
   // 드래그/리사이즈 종료 시 대시보드 전체 저장 (수동 편집)
-  const handleLayoutChange = async (next: RglItem[]) => {
+  // 알려진 경쟁 조건: AI 채팅이 동시에 위젯을 추가하면 이 전체-저장이 그 변경을 덮어쓸 수 있다
+  // (로컬 단일 사용자 도구라 허용; refresh가 직후 상태를 재동기화).
+  const handleLayoutChange = (next: RglItem[]) => {
     const moved = next.some((item) => {
       const w = dashboard.widgets.find((x) => x.id === item.i);
       return w && (w.layout.x !== item.x || w.layout.y !== item.y ||
@@ -35,16 +38,18 @@ export default function DashboardGrid({ dashboard, onChanged }: Props) {
       const item = next.find((x) => x.i === w.id);
       return item ? { ...w, layout: { x: item.x, y: item.y, w: item.w, h: item.h } } : w;
     });
-    await api.saveDashboard({ ...dashboard, widgets });
-    onChanged();
+    api.saveDashboard({ ...dashboard, widgets })
+      .then(() => onChanged())
+      .catch((e) => void message.error(`레이아웃 저장 실패: ${(e as Error).message}`));
   };
 
-  const removeWidget = async (widgetId: string) => {
-    await api.saveDashboard({
+  const removeWidget = (widgetId: string) => {
+    api.saveDashboard({
       ...dashboard,
       widgets: dashboard.widgets.filter((w) => w.id !== widgetId),
-    });
-    onChanged();
+    })
+      .then(() => onChanged())
+      .catch((e) => void message.error(`위젯 삭제 실패: ${(e as Error).message}`));
   };
 
   return (
