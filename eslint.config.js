@@ -4,11 +4,11 @@ import globals from 'globals';
 import reactHooks from 'eslint-plugin-react-hooks';
 
 export default tseslint.config(
-  { ignores: ['**/node_modules/**', '**/dist/**', 'data/**', 'logs/**'] },
+  { ignores: ['**/node_modules/**', '**/dist/**', 'data/**', 'logs/**', 'electron/dist/**', 'electron/release/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['server/**/*.ts'],
+    files: ['server/**/*.ts', 'electron/**/*.ts'],
     languageOptions: {
       globals: { ...globals.node },
     },
