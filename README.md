@@ -2,16 +2,17 @@
 
 AI 채팅(오른쪽 drawer)으로 말하면 CLI 기반 위젯 대시보드를 만들어주는 로컬 전용 도구.
 
-## 시작하기
+## 시작하기 (데스크톱 앱)
 
 ```bash
 npm install
-cp server/.env.example server/.env   # ANTHROPIC_API_KEY 기입
-npm run dev                           # server:5174 + web:5173
+npm run app:dev     # 개발: Electron 창 + HMR (server:5174, web:5173)
+npm run app:build   # 패키징: electron/release/ 에 .app/.dmg 생성
 ```
 
-브라우저에서 http://localhost:5173 → 우하단 채팅 버튼 →
-"배포 현황 대시보드 만들고 argocd 앱 목록 테이블 넣어줘"
+AI 채팅은 로컬 `claude` CLI(Claude Code)를 사용한다 — 별도 API 키 불필요.
+Claude Code가 설치·로그인되어 있어야 한다. (API 모드로 쓰려면
+`CHAT_ADAPTER=api` + `server/.env`에 `ANTHROPIC_API_KEY` 설정)
 
 ## 구조
 
@@ -22,11 +23,19 @@ npm run dev                           # server:5174 + web:5173
 ## 명령어
 
 ```bash
-npm run dev        # 서버 + 웹 동시 실행
-npm test           # 서버 단위 테스트 (Vitest)
-npm run lint       # ESLint (server + web)
-npm run typecheck -w server && npm run typecheck -w web
+npm run app:dev    # Electron 개발 실행
+npm run app:build  # .app/.dmg 빌드
+npm run dev        # (웹 전용) server + web 브라우저 모드
+npm test           # 서버 단위 테스트
+npm run lint       # ESLint
 ```
+
+## 자동 업데이트
+
+GitHub Releases(`latest-mac.yml` + zip) 기반. 앱 시작 5초 후 자동 확인,
+사이드바 '업데이트 확인'으로 수동 확인. 다운로드 진행률 100% 후 자동 재시작.
+릴리스 배포: electron/package.json 버전 올리고 `npm run app:build` 후 GitHub
+Release에 `electron/release/*.zip`, `*.dmg`, `latest-mac.yml` 업로드.
 
 ## 확장 포인트
 

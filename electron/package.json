@@ -7,12 +7,12 @@
   "scripts": {
     "dev": "node build.mjs && ELECTRON_START_URL=http://localhost:5173 electron .",
     "build:bundle": "node build.mjs",
-    "dist": "node build.mjs && electron-builder",
+    "dist": "node build.mjs && electron-builder --publish never",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "electron": "^33.0.0",
+    "electron": "33.4.11",
     "electron-builder": "^25.1.0",
     "electron-updater": "^6.3.0",
     "esbuild": "^0.24.0",

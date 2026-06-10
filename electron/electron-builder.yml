@@ -13,8 +13,6 @@ mac:
   target:
     - target: zip      # 자동 업데이트용 (필수)
       arch: [arm64]
-    - target: dmg
-      arch: [arm64]
 publish:
   provider: github
   owner: jehyukkim674
