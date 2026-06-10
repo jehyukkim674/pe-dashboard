@@ -1,9 +1,20 @@
 {
   "name": "pe-dashboard",
   "private": true,
-  "workspaces": ["server", "web"],
+  "type": "module",
+  "workspaces": [
+    "server",
+    "web"
+  ],
   "scripts": {
     "dev": "npm run dev -w server & npm run dev -w web & wait",
-    "test": "npm test -w server"
+    "test": "npm test -w server",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.4.1",
+    "globals": "^17.6.0",
+    "typescript-eslint": "^8.61.0"
   }
 }

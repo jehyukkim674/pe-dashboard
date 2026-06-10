@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src test"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
