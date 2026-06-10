@@ -40,32 +40,45 @@ export const api = {
     ),
 };
 
-// POST 기반 SSE: fetch 스트림에서 'data: {...}\n\n' 청크를 파싱해 이벤트 콜백
+// POST 기반 SSE: fetch 스트림에서 'data: {...}\n\n' 청크를 파싱해 이벤트 콜백.
+// signal로 진행 중인 스트림을 중단할 수 있다 (드로어 언마운트, 새 메시지 전송 시).
 export async function streamChat(
   sessionId: string,
   message: string,
   onEvent: (e: ChatEvent) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ sessionId, message }),
+    signal,
   });
-  if (!res.ok || !res.body) throw new Error(`chat failed: ${res.status}`);
+  if (!res.ok) throw new Error(`chat failed: ${res.status}`);
+  if (!res.body) throw new Error('response body is null');
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let idx: number;
-    while ((idx = buffer.indexOf('\n\n')) >= 0) {
-      const chunk = buffer.slice(0, idx);
-      buffer = buffer.slice(idx + 2);
-      const line = chunk.split('\n').find((l) => l.startsWith('data: '));
-      if (line) onEvent(JSON.parse(line.slice(6)) as ChatEvent);
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx: number;
+      while ((idx = buffer.indexOf('\n\n')) >= 0) {
+        const chunk = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        const line = chunk.split('\n').find((l) => l.startsWith('data: '));
+        if (!line) continue;
+        try {
+          onEvent(JSON.parse(line.slice(6)) as ChatEvent);
+        } catch {
+          // 잘못된 프레임은 건너뛴다 — 스트림 전체를 죽이지 않는다
+        }
+      }
     }
+  } finally {
+    await reader.cancel().catch(() => {});
   }
 }

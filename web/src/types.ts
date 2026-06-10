@@ -39,6 +39,7 @@ export interface CommandResult {
 }
 // --- 여기까지 서버와 동일 ---
 
+// ChatEvent는 server/src/ai/chatService.ts 기준 ('done' 이벤트는 chat.ts 라우트가 추가)
 export type ChatEvent =
   | { type: 'text'; text: string }
   | { type: 'tool'; name: string; summary: string }
