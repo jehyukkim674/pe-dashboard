@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button, Empty, Input, Layout, Menu, message, Modal, Typography, FloatButton } from 'antd';
-import { CommentOutlined, PlusOutlined } from '@ant-design/icons';
+import { CommentOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
 import { api } from './api';
 import type { Dashboard } from './types';
 import DashboardGrid from './components/DashboardGrid';
 import ChatDrawer from './components/ChatDrawer';
+import UpdateModal from './components/UpdateModal';
 
 export default function App() {
   const [dashboards, setDashboards] = useState<Dashboard[]>([]);
@@ -13,6 +14,7 @@ export default function App() {
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [updateCheckCount, setUpdateCheckCount] = useState(0);
 
   const refresh = useCallback(async (selectId?: string) => {
     const list = await api.listDashboards();
@@ -64,6 +66,13 @@ export default function App() {
         >
           새 대시보드
         </Button>
+        <Button
+          type="text" icon={<SyncOutlined />} block
+          style={{ width: 'calc(100% - 32px)', margin: '0 16px' }}
+          onClick={() => setUpdateCheckCount((c) => c + 1)}
+        >
+          업데이트 확인
+        </Button>
       </Layout.Sider>
 
       <Layout.Content style={{ padding: 16, background: '#f5f5f5' }}>
@@ -79,6 +88,7 @@ export default function App() {
         tooltip="AI 채팅" onClick={() => setChatOpen(true)}
       />
       <ChatDrawer open={chatOpen} onClose={() => setChatOpen(false)} onDashboardsChanged={refresh} />
+      <UpdateModal manualCheckCount={updateCheckCount} />
 
       <Modal
         title="새 대시보드" open={creating} onOk={createDashboard}
