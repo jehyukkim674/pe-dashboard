@@ -5,7 +5,7 @@ const common = {
   platform: 'node',
   format: 'cjs',
   external: ['electron'],
-  sourcemap: false,
+  sourcemap: 'linked',
   logLevel: 'info',
 };
 

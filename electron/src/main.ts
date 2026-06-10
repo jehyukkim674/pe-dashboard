@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import path from 'node:path';
 import { startServer } from '../../server/src/start.js';
 import { checkUpdateStatus, startInstall } from './updater.js';
@@ -34,10 +34,29 @@ async function createWindow(): Promise<void> {
   await win.loadURL(`http://127.0.0.1:${port}`);
 }
 
-app.whenReady().then(async () => {
-  ipcMain.handle('updater:check', () => checkUpdateStatus());
-  ipcMain.handle('updater:install', () => (win ? startInstall(win) : undefined));
-  await createWindow();
-});
+// 동일 데이터 디렉토리에 대한 동시 쓰기 방지: 두 번째 인스턴스는 즉시 종료
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.focus();
+    }
+  });
 
-app.on('window-all-closed', () => app.quit());
+  app.whenReady().then(async () => {
+    ipcMain.handle('updater:check', () => checkUpdateStatus());
+    ipcMain.handle('updater:install', () => (win ? startInstall(win) : undefined));
+    await createWindow();
+  }).catch((err: unknown) => {
+    dialog.showErrorBox(
+      'PE Dashboard — 시작 실패',
+      err instanceof Error ? err.message : String(err),
+    );
+    app.quit();
+  });
+
+  app.on('window-all-closed', () => app.quit());
+}
