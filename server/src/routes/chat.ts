@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import type { ChatService, ChatEvent } from '../ai/chatService.js';
+import type { ChatAdapter, ChatEvent } from '../ai/adapter.js';
 
-export function chatRoutes(app: FastifyInstance, chatService: ChatService): void {
+export function chatRoutes(app: FastifyInstance, chatService: ChatAdapter): void {
   app.post('/api/chat', async (req, reply) => {
     const { sessionId, message } = req.body as { sessionId?: string; message?: string };
     if (!sessionId || !message) {
