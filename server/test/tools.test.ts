@@ -87,4 +87,32 @@ describe('AI tools', () => {
     expect(result.status).toBe('pending_confirmation');
     expect(pending.peek(result.pendingId)?.id).toBe('kubectl_ctx');
   });
+
+  it('create_dashboard rejects missing name', async () => {
+    await expect(tools.handlers.create_dashboard({})).rejects.toThrow(/name is required/);
+  });
+
+  it('update_widget validates patched dataSource', async () => {
+    const created = (await tools.handlers.create_dashboard({ name: 'u' })) as { id: string };
+    const widget = (await tools.handlers.add_widget({
+      dashboardId: created.id,
+      widget: {
+        type: 'stat', title: 't', layout: { x: 0, y: 0, w: 3, h: 2 },
+        dataSource: { kind: 'cli', commandId: 'gh_run_list', params: { repo: 'a/b' } },
+      },
+    })) as { id: string };
+    await expect(
+      tools.handlers.update_widget({
+        dashboardId: created.id,
+        widgetId: widget.id,
+        patch: { dataSource: { kind: 'cli', commandId: 'nope', params: {} } },
+      }),
+    ).rejects.toThrow(/unknown command/);
+  });
+
+  it('register_command rejects malformed template immediately', async () => {
+    await expect(
+      tools.handlers.register_command({ id: 'bad id!', description: 'x', argv: ['echo'], params: [] }),
+    ).rejects.toThrow(/invalid template id/);
+  });
 });

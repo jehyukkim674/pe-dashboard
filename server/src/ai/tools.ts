@@ -1,6 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { DashboardStore } from '../dashboardStore.js';
-import type { CommandRegistry } from '../commands/registry.js';
+import { type CommandRegistry, validateTemplate } from '../commands/registry.js';
 import type { PendingCommands } from '../commands/pending.js';
 import { runArgv } from '../commands/runner.js';
 import type { Widget } from '../types.js';
@@ -30,7 +30,7 @@ const dataSourceSchema = {
   properties: {
     kind: { type: 'string', enum: ['cli'] },
     commandId: { type: 'string' },
-    params: { type: 'object' },
+    params: { type: 'object', additionalProperties: { type: 'string' } },
     refreshSec: { type: 'number' },
   },
   required: ['kind', 'commandId', 'params'],
@@ -115,7 +115,10 @@ export function buildTools(ctx: ToolContext): ToolKit {
       description: '명령을 1회 실행해 출력 구조를 확인한다. 위젯 구성 전 출력 형태가 불확실할 때 사용.',
       input_schema: {
         type: 'object',
-        properties: { commandId: { type: 'string' }, params: { type: 'object' } },
+        properties: {
+          commandId: { type: 'string' },
+          params: { type: 'object', additionalProperties: { type: 'string' } },
+        },
         required: ['commandId', 'params'],
       },
     },
@@ -140,7 +143,10 @@ export function buildTools(ctx: ToolContext): ToolKit {
   const handlers: ToolKit['handlers'] = {
     list_dashboards: async () => ctx.store.list(),
 
-    create_dashboard: async (input: { name: string }) => ctx.store.create(input.name),
+    create_dashboard: async (input: { name: string }) => {
+      if (!input.name || typeof input.name !== 'string') throw new Error('name is required');
+      return ctx.store.create(input.name);
+    },
 
     delete_dashboard: async (input: { id: string }) => {
       const deleted = await ctx.store.delete(input.id);
@@ -187,6 +193,7 @@ export function buildTools(ctx: ToolContext): ToolKit {
       params: string[];
     }) => {
       if (ctx.commands.get(input.id)) throw new Error(`template already exists: ${input.id}`);
+      validateTemplate({ ...input, builtin: false });
       const pendingId = ctx.pending.add({ ...input, builtin: false });
       return { pendingId, status: 'pending_confirmation', command: input };
     },
