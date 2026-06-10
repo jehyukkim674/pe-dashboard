@@ -18,6 +18,7 @@ interface Deps {
 }
 
 const MAX_TURNS = 8;
+const MAX_HISTORY_MESSAGES = 60;
 
 export class ChatService {
   private readonly sessions = new Map<string, Anthropic.MessageParam[]>();
@@ -27,35 +28,57 @@ export class ChatService {
   async chat(sessionId: string, userMessage: string, emit: (e: ChatEvent) => void): Promise<void> {
     const history = this.sessions.get(sessionId) ?? [];
     this.sessions.set(sessionId, history);
+    this.trimHistory(history);
+    const snapshot = history.length; // 실패 시 이 길이로 롤백
     history.push({ role: 'user', content: userMessage });
 
-    for (let turn = 0; turn < MAX_TURNS; turn++) {
-      const response = await this.deps.client.messages.create({
-        model: process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-6',
-        max_tokens: 4096,
-        system: await this.systemPrompt(),
-        tools: this.deps.tools.definitions,
-        messages: [...history],
-      });
-
-      history.push({ role: 'assistant', content: response.content });
-      for (const block of response.content) {
-        if (block.type === 'text' && block.text.trim()) emit({ type: 'text', text: block.text });
-      }
-      if (response.stop_reason !== 'tool_use') return;
-
-      const results: Anthropic.ToolResultBlockParam[] = [];
-      for (const block of response.content) {
-        if (block.type !== 'tool_use') continue;
-        results.push({
-          type: 'tool_result',
-          tool_use_id: block.id,
-          content: await this.runTool(block.name, block.input, emit),
+    try {
+      for (let turn = 0; turn < MAX_TURNS; turn++) {
+        const response = await this.deps.client.messages.create({
+          model: process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-6',
+          max_tokens: 4096,
+          system: await this.systemPrompt(),
+          tools: this.deps.tools.definitions,
+          messages: [...history],
         });
+
+        history.push({ role: 'assistant', content: response.content });
+        for (const block of response.content) {
+          if (block.type === 'text' && block.text.trim()) emit({ type: 'text', text: block.text });
+        }
+        if (response.stop_reason !== 'tool_use') return;
+
+        const toolBlocks = response.content.filter(
+          (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
+        );
+        const results: Anthropic.ToolResultBlockParam[] = await Promise.all(
+          toolBlocks.map(async (b) => ({
+            type: 'tool_result' as const,
+            tool_use_id: b.id,
+            content: await this.runTool(b.name, b.input, emit),
+          })),
+        );
+        history.push({ role: 'user', content: results });
       }
-      history.push({ role: 'user', content: results });
+      emit({ type: 'error', message: `도구 호출이 ${MAX_TURNS}회를 초과해 중단했습니다.` });
+    } catch (e) {
+      history.length = snapshot; // API 실패 시 미완성 턴 제거 (세션 보존)
+      throw e;
     }
-    emit({ type: 'error', message: `도구 호출이 ${MAX_TURNS}회를 초과해 중단했습니다.` });
+  }
+
+  // 오래된 턴 제거. tool_use/tool_result 쌍이 깨지지 않도록
+  // 남는 첫 메시지가 '문자열 content를 가진 user 메시지'가 될 때까지 더 버린다.
+  private trimHistory(history: Anthropic.MessageParam[]): void {
+    if (history.length <= MAX_HISTORY_MESSAGES) return;
+    let start = history.length - MAX_HISTORY_MESSAGES;
+    while (
+      start < history.length &&
+      !(history[start].role === 'user' && typeof history[start].content === 'string')
+    ) {
+      start++;
+    }
+    history.splice(0, start);
   }
 
   private async runTool(
@@ -67,7 +90,7 @@ export class ChatService {
     if (!handler) return `ERROR: unknown tool ${name}`;
     try {
       const output = await handler(input);
-      emit({ type: 'tool', name, summary: summarize(name, input) });
+      emit({ type: 'tool', name, summary: describeToolCall(name, input) });
       if (name === 'register_command') {
         const { pendingId, command } = output as { pendingId: string; command: CommandTemplate };
         emit({ type: 'confirm_request', pendingId, command });
@@ -97,7 +120,7 @@ export class ChatService {
   }
 }
 
-function summarize(name: string, input: unknown): string {
+function describeToolCall(name: string, input: unknown): string {
   const i = input as Record<string, unknown>;
   switch (name) {
     case 'create_dashboard': return `대시보드 '${String(i['name'])}' 생성`;

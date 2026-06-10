@@ -108,4 +108,40 @@ describe('ChatService', () => {
     expect(messages.length).toBe(3); // user1, assistant1, user2
     expect(messages[0].content).toBe('첫번째');
   });
+
+  it('rolls back history when the API call fails, keeping the session usable', async () => {
+    const { service, create } = await makeService([]);
+    create.mockRejectedValueOnce(new Error('rate limited'));
+    // 다음 호출은 성공 응답
+    create.mockResolvedValueOnce({
+      stop_reason: 'end_turn',
+      content: [{ type: 'text', text: '복구됨' }],
+    });
+
+    const { events, emit } = collectEvents();
+    await expect(service.chat('s1', '첫 요청', emit)).rejects.toThrow('rate limited');
+
+    await service.chat('s1', '두번째 요청', emit);
+    // 실패한 턴이 롤백되어, 성공 호출의 messages는 [user('두번째 요청')] 하나여야 한다
+    const messages = create.mock.calls[1][0].messages;
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toEqual({ role: 'user', content: '두번째 요청' });
+    expect(events.at(-1)).toEqual({ type: 'text', text: '복구됨' });
+  });
+
+  it('executes multiple tool_use blocks from one response', async () => {
+    const { service, store } = await makeService([
+      {
+        stop_reason: 'tool_use',
+        content: [
+          { type: 'tool_use', id: 'tu1', name: 'create_dashboard', input: { name: 'A' } },
+          { type: 'tool_use', id: 'tu2', name: 'create_dashboard', input: { name: 'B' } },
+        ],
+      },
+      { stop_reason: 'end_turn', content: [{ type: 'text', text: '완료' }] },
+    ]);
+    const { emit } = collectEvents();
+    await service.chat('s1', '둘 다 만들어', emit);
+    expect((await store.list()).map((d) => d.name).sort()).toEqual(['A', 'B']);
+  });
 });
