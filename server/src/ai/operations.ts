@@ -40,7 +40,8 @@ export async function applyOperations(
         emit({ type: 'confirm_request', pendingId, command });
       }
     } catch (e) {
-      emit({ type: 'error', message: `작업 실패 (${operation.op}): ${(e as Error).message}` });
+      const message = e instanceof Error ? e.message : String(e);
+      emit({ type: 'error', message: `작업 실패 (${operation.op}): ${message}` });
     }
   }
 }
