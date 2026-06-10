@@ -5,6 +5,11 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_BUFFER = 4 * 1024 * 1024;
 
 export function runArgv(argv: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise<CommandResult> {
+  if (argv.length === 0) {
+    return Promise.resolve({
+      ok: false, exitCode: null, stdout: '', stderr: '', error: 'argv가 비어 있습니다.',
+    });
+  }
   return new Promise((resolve) => {
     execFile(
       argv[0],

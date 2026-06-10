@@ -33,4 +33,17 @@ describe('runArgv', () => {
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/초과/);
   }, 10_000);
+
+  it('resolves with error for empty argv instead of rejecting', async () => {
+    const result = await runArgv([]);
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/비어/);
+  });
+
+  it('extracts non-zero exit code with generic stderr fallback', async () => {
+    const result = await runArgv(['node', '-e', 'console.error("boom"); process.exit(5)']);
+    expect(result.ok).toBe(false);
+    expect(result.exitCode).toBe(5);
+    expect(result.error).toContain('boom');
+  });
 });
