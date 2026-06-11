@@ -17,7 +17,8 @@ export default function TableWidget({ result, display }: {
       rowKey={(_, i) => String(i)}
       dataSource={rows}
       columns={columns.map((key) => ({
-        title: key, dataIndex: key, key,
+        // antd v4+는 'a.b' 문자열로 중첩 필드를 찾지 않으므로 배열 경로로 변환
+        title: key, dataIndex: key.split('.'), key,
         render: (v: unknown) => (typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v ?? '')),
       }))}
     />
