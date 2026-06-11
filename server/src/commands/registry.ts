@@ -4,7 +4,7 @@ import type { CommandTemplate } from '../types.js';
 const BUILTIN: CommandTemplate[] = [
   {
     id: 'gh_run_list',
-    description: 'GitHub Actions 워크플로우 실행 목록 (JSON)',
+    description: 'GitHub Actions 워크플로우 실행 목록 (JSON). repo는 OWNER/REPO 형식 (예: kt-cloud-infra-ops/cmdb-frontend)',
     argv: ['gh', 'run', 'list', '--repo', '{repo}', '--limit', '20', '--json',
       'status,conclusion,name,displayTitle,createdAt,url'],
     params: ['repo'],
@@ -12,7 +12,7 @@ const BUILTIN: CommandTemplate[] = [
   },
   {
     id: 'gh_pr_list',
-    description: 'GitHub PR 목록 (JSON)',
+    description: 'GitHub PR 목록 (JSON). repo는 OWNER/REPO 형식 (예: kt-cloud-infra-ops/cmdb-frontend)',
     argv: ['gh', 'pr', 'list', '--repo', '{repo}', '--json',
       'number,title,author,state,createdAt,url'],
     params: ['repo'],
