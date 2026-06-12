@@ -6,6 +6,13 @@ interface Props {
   manualCheckCount: number; // App의 '업데이트 확인' 버튼 클릭마다 증가
 }
 
+export function sanitizeNotes(html: string): string {
+  return html
+    .replace(/<\s*(script|style|iframe)[^>]*>[\s\S]*?<\/\s*\1\s*>/gi, '')
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/javascript:/gi, '');
+}
+
 export default function UpdateModal({ manualCheckCount }: Props) {
   const [update, setUpdate] = useState<UpdateCheckPayload>();
   const [percent, setPercent] = useState<number>();
@@ -67,7 +74,7 @@ export default function UpdateModal({ manualCheckCount }: Props) {
       open={update !== undefined}
       onCancel={() => !downloading && setUpdate(undefined)}
       closable={!downloading}
-      maskClosable={false}
+      mask={{ closable: false }}
       footer={
         downloading ? null : [
           <Button key="later" onClick={() => setUpdate(undefined)}>나중에</Button>,
@@ -76,7 +83,11 @@ export default function UpdateModal({ manualCheckCount }: Props) {
       }
     >
       {update?.notes && (
-        <Typography.Paragraph style={{ whiteSpace: 'pre-wrap' }}>{update.notes}</Typography.Paragraph>
+        <Typography>
+          {/* GitHub 릴리스 노트는 HTML로 내려온다. 우리 저장소 릴리스만 표시하지만
+              방어적으로 script/이벤트 핸들러를 제거하고 렌더링한다. */}
+          <div dangerouslySetInnerHTML={{ __html: sanitizeNotes(update.notes) }} />
+        </Typography>
       )}
       {downloading && (
         <Progress percent={percent} status={percent !== undefined && percent < 100 ? 'active' : 'success'} />
