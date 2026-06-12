@@ -27,5 +27,14 @@ export default function StatWidget({ result, display }: {
     typeof value === 'object' && value !== null
       ? JSON.stringify(value).slice(0, 30)
       : String(value ?? '—');
-  return <Statistic value={text} suffix={d.suffix} />;
+  // 숫자 하나가 주인공인 위젯 — 카드 중앙에 크게
+  return (
+    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <Statistic
+        value={text}
+        suffix={d.suffix}
+        valueStyle={{ fontSize: 34, fontWeight: 600, lineHeight: 1.1 }}
+      />
+    </div>
+  );
 }

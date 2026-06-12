@@ -128,7 +128,7 @@ export default function DashboardGrid({ dashboard, onChanged }: Props) {
 
   return (
     <>
-      <div style={{ marginBottom: 4, textAlign: 'right' }}>
+      <div className="dash-toolbar" style={{ marginBottom: 4, textAlign: 'right' }}>
         <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => setAdding(true)}>
           위젯 추가
         </Button>

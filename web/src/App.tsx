@@ -154,7 +154,10 @@ export default function App() {
     <ConfigProvider theme={{ algorithm: dark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm }}>
     <Layout style={{ minHeight: '100vh' }}>
       {!tvMode && (
-      <Layout.Sider theme="light" width={220}>
+      <Layout.Sider
+        theme="light" width={220}
+        style={{ position: 'sticky', top: 0, height: '100vh', overflow: 'hidden' }}
+      >
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <Typography.Title level={4} style={{ padding: '16px 16px 0' }}>
           PE Dashboard
@@ -234,7 +237,10 @@ export default function App() {
       </Layout.Sider>
       )}
 
-      <Layout.Content style={{ padding: 16, background: dark ? '#101010' : '#f5f5f5' }}>
+      <Layout.Content
+        className={tvMode ? 'tv-mode' : undefined}
+        style={{ padding: 16, background: dark ? '#101010' : '#f5f5f5' }}
+      >
         {selected ? (
           <DashboardGrid dashboard={selected} onChanged={() => refresh()} />
         ) : (

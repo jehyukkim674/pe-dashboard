@@ -47,3 +47,12 @@
 }
 .chat-assistant code { font-size: 12px; }
 .chat-assistant ul, .chat-assistant ol { padding-left: 20px; margin: 4px 0; }
+
+/* TV 모드: 멀리서 보는 용도 — 글씨·수치·타일 확대, 편집용 툴바 숨김 */
+.tv-mode .ant-card-head-title { font-size: 17px; }
+.tv-mode .widget-body { font-size: 15px; }
+.tv-mode .widget-body pre { font-size: 14px !important; }
+.tv-mode .ant-table { font-size: 14px; }
+.tv-mode .ant-statistic-content { font-size: 46px !important; }
+.tv-mode .dash-toolbar { display: none; }
+.tv-mode .hover-actions { display: none !important; }
