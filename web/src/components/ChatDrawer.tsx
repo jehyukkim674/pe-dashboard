@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Drawer, Input, Select, Space, Tag, Typography, message as antdMessage } from 'antd';
-import { CheckOutlined, CloseOutlined, SendOutlined, ToolOutlined } from '@ant-design/icons';
+import { Alert, Button, Drawer, Input, Select, Space, Tag, Tooltip, Typography, message as antdMessage } from 'antd';
+import { CheckOutlined, ClearOutlined, CloseOutlined, SendOutlined, ToolOutlined } from '@ant-design/icons';
 import { api, streamChat } from '../api';
 import type { ChatEvent, CommandTemplate } from '../types';
 
@@ -18,7 +18,26 @@ type Item =
   | { kind: 'confirm'; pendingId: string; command: CommandTemplate; warning?: string; resolved?: 'ok' | 'no' }
   | { kind: 'error'; text: string };
 
-const SESSION_ID = `s-${Date.now()}`;
+// 세션 id와 대화 내역을 localStorage에 보존해 앱 재시작 후에도 이어 보이게 한다
+const SESSION_ID = (() => {
+  const saved = localStorage.getItem('pe-chat-session') ?? `s-${Date.now()}`;
+  localStorage.setItem('pe-chat-session', saved);
+  return saved;
+})();
+const HISTORY_KEY = 'pe-chat-history';
+const HISTORY_MAX = 100;
+
+function loadHistory(): Item[] {
+  try {
+    const items = JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]') as Item[];
+    // 재시작하면 서버의 승인 대기 목록은 사라지므로, 미해결 승인 카드는 만료 처리
+    return items.map((it) =>
+      it.kind === 'confirm' && !it.resolved ? { ...it, resolved: 'no' as const } : it,
+    );
+  } catch {
+    return [];
+  }
+}
 
 // claude CLI --model 별칭. '' = CLI 기본 모델
 const MODEL_OPTIONS = [
@@ -29,7 +48,7 @@ const MODEL_OPTIONS = [
 ];
 
 export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboardId }: Props) {
-  const [items, setItems] = useState<Item[]>([]);
+  const [items, setItems] = useState<Item[]>(loadHistory);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState<string>(); // 진행 단계 ('화면 데이터 수집 중…' 등)
@@ -49,6 +68,15 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [items.length]);
+
+  useEffect(() => {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(-HISTORY_MAX)));
+  }, [items]);
+
+  const clearHistory = () => {
+    setItems([]);
+    localStorage.removeItem(HISTORY_KEY);
+  };
 
   const send = async () => {
     const text = input.trim();
@@ -115,10 +143,15 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
     <Drawer
       title="AI 채팅" placement="right" size={420} open={open} onClose={onClose}
       extra={
-        <Select
-          size="small" style={{ width: 130 }} value={model}
-          options={MODEL_OPTIONS} onChange={changeModel} title="응답 모델"
-        />
+        <Space>
+          <Select
+            size="small" style={{ width: 130 }} value={model}
+            options={MODEL_OPTIONS} onChange={changeModel} title="응답 모델"
+          />
+          <Tooltip title="대화 지우기">
+            <Button size="small" type="text" icon={<ClearOutlined />} onClick={clearHistory} />
+          </Tooltip>
+        </Space>
       }
     >
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
