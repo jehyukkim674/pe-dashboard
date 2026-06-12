@@ -94,7 +94,7 @@ describe('ClaudeCliAdapter', () => {
     const { events, emit } = collect();
     await adapter.chat('s1', '배포 대시보드 만들어줘', emit);
 
-    expect(events[0]).toEqual({ type: 'text', text: '만들었습니다' });
+    expect(events.find((e) => e.type === 'text')).toEqual({ type: 'text', text: '만들었습니다' });
     expect(events.some((e) => e.type === 'tool')).toBe(true);
     expect((await store.list()).map((d) => d.name)).toEqual(['배포']);
   });
@@ -176,7 +176,8 @@ describe('ClaudeCliAdapter', () => {
       const prompt = claudeCall[claudeCall.indexOf('-p') + 1];
       expect(prompt).toContain('abc123 최근 커밋 한 줄');
       expect(prompt).toContain('최근 커밋'); // 위젯 제목 포함
-      expect(events[0]).toEqual({ type: 'text', text: '최근 커밋은 abc123 입니다' });
+      expect(events.find((e) => e.type === 'text'))
+        .toEqual({ type: 'text', text: '최근 커밋은 abc123 입니다' });
     });
 
     it('identifies the current dashboard even when it has no widgets', async () => {
@@ -190,6 +191,32 @@ describe('ClaudeCliAdapter', () => {
       const prompt = calls[0][calls[0].indexOf('-p') + 1];
       expect(prompt).toContain(`현재 보고 있는 대시보드: id="${dashboard.id}"`);
       expect(prompt).toContain('현재 보고 있는 대시보드"에 적용');
+    });
+
+    it('emits progress status events', async () => {
+      const { adapter, store } = await makeAdapter([
+        cliResult({ stdout: 'data' }),
+        envelope('{"reply":"네","operations":[]}'),
+      ]);
+      const dashboard = await store.create('d');
+      await store.addWidget(dashboard.id, {
+        type: 'log', title: 'w', layout: { x: 0, y: 0, w: 6, h: 5 },
+        dataSource: { kind: 'cli', commandId: 'git_log', params: { repoPath: '/tmp/x' } },
+      });
+      const { events, emit } = collect();
+      await adapter.chat('s1', '안녕', emit, { dashboardId: dashboard.id });
+      const stages = events.filter((e) => e.type === 'status').map((e) => e.stage);
+      expect(stages[0]).toMatch(/수집 중/);
+      expect(stages[1]).toMatch(/생성 중/);
+    });
+
+    it('stops silently when the client aborted', async () => {
+      const { adapter } = await makeAdapter([envelope('{"reply":"늦은 답","operations":[]}')]);
+      const ac = new AbortController();
+      ac.abort();
+      const { events, emit } = collect();
+      await adapter.chat('s1', '안녕', emit, { signal: ac.signal });
+      expect(events.filter((e) => e.type === 'text')).toHaveLength(0);
     });
 
     it('does not run widget commands when no dashboardId is given', async () => {

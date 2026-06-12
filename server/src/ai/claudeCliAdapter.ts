@@ -22,7 +22,7 @@ const READONLY_CLI_FLAGS = [
   '--disallowedTools', 'Bash,Write,Edit,NotebookEdit,WebFetch,WebSearch',
 ];
 
-type Exec = (argv: string[], timeoutMs?: number) => Promise<CommandResult>;
+type Exec = (argv: string[], timeoutMs?: number, signal?: AbortSignal) => Promise<CommandResult>;
 
 interface Deps {
   store: DashboardStore;
@@ -56,11 +56,16 @@ export class ClaudeCliAdapter implements ChatAdapter {
     emit: (e: ChatEvent) => void,
     context?: ChatContext,
   ): Promise<void> {
+    if (context?.dashboardId) emit({ type: 'status', stage: '화면 위젯 데이터 수집 중…' });
     const prompt = await this.buildPrompt(sessionId, userMessage, context);
+
+    emit({ type: 'status', stage: 'AI 응답 생성 중…' });
     const result = await this.exec(
       ['claude', '-p', prompt, '--output-format', 'json', ...READONLY_CLI_FLAGS],
       CLI_TIMEOUT_MS,
+      context?.signal, // 클라이언트가 끊으면 claude 프로세스도 종료
     );
+    if (context?.signal?.aborted) return; // 받을 사람이 없으니 조용히 종료
 
     if (!result.ok) {
       const base = result.error ?? 'claude CLI 실행에 실패했습니다';

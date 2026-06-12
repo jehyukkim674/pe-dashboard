@@ -19,8 +19,12 @@ export function chatRoutes(app: FastifyInstance, chatService: ChatAdapter): void
     const emit = (e: ChatEvent | { type: 'done' }) =>
       reply.raw.write(`data: ${JSON.stringify(e)}\n\n`);
 
+    // 클라이언트가 스트림을 끊으면(새 메시지 전송·드로어 닫기) 진행 중인 AI 실행을 중단
+    const abort = new AbortController();
+    reply.raw.on('close', () => abort.abort());
+
     try {
-      await chatService.chat(sessionId, message, emit, { dashboardId });
+      await chatService.chat(sessionId, message, emit, { dashboardId, signal: abort.signal });
     } catch (e) {
       emit({ type: 'error', message: (e as Error).message } as ChatEvent);
     } finally {

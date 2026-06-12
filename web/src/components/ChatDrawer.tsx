@@ -24,6 +24,7 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
   const [items, setItems] = useState<Item[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState<string>(); // 진행 단계 ('화면 데이터 수집 중…' 등)
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -46,7 +47,11 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
     setBusy(true);
     try {
       await streamChat(SESSION_ID, text, (e: ChatEvent) => {
-        if (e.type === 'text') push({ kind: 'assistant', text: e.text });
+        if (e.type === 'status') setStage(e.stage);
+        if (e.type === 'text') {
+          setStage(undefined);
+          push({ kind: 'assistant', text: e.text });
+        }
         if (e.type === 'tool') {
           push({ kind: 'tool', summary: e.summary });
           onDashboardsChanged(); // 도구 실행마다 메인 대시보드 실시간 갱신
@@ -62,6 +67,7 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
       }
     } finally {
       setBusy(false);
+      setStage(undefined);
     }
   };
 
@@ -153,6 +159,11 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
                 return <Alert key={i} type="error" message={item.text} style={{ marginBottom: 8 }} />;
             }
           })}
+          {busy && stage && (
+            <Typography.Text type="secondary" italic style={{ fontSize: 12 }}>
+              {stage}
+            </Typography.Text>
+          )}
           <div ref={bottomRef} />
         </div>
         <Space.Compact style={{ width: '100%' }}>

@@ -5,7 +5,11 @@ import { logCommand } from './auditLog.js';
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_BUFFER = 4 * 1024 * 1024;
 
-export function runArgv(argv: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise<CommandResult> {
+export function runArgv(
+  argv: string[],
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  signal?: AbortSignal,
+): Promise<CommandResult> {
   if (argv.length === 0) {
     return Promise.resolve({
       ok: false, exitCode: null, stdout: '', stderr: '', error: 'argv가 비어 있습니다.',
@@ -16,7 +20,7 @@ export function runArgv(argv: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise
     execFile(
       argv[0],
       argv.slice(1),
-      { timeout: timeoutMs, maxBuffer: MAX_BUFFER },
+      { timeout: timeoutMs, maxBuffer: MAX_BUFFER, signal },
       (err, stdout, stderr) => {
         const result: CommandResult = {
           ok: !err,
