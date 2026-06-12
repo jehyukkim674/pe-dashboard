@@ -81,6 +81,13 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit }
               title="자동 갱신 주기"
             />
           )}
+          {widget.dataSource && updatedAt && (
+            <Tooltip title="마지막 갱신 시각">
+              <span style={{ fontSize: 11, color: 'rgba(128,128,128,0.85)', fontVariantNumeric: 'tabular-nums' }}>
+                {new Date(updatedAt).toTimeString().slice(0, 8)}
+              </span>
+            </Tooltip>
+          )}
           {loading && <Spin size="small" />}
           {!loading && widget.dataSource && (
             <Tooltip title="지금 새로고침">
