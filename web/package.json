@@ -6,22 +6,26 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@ant-design/icons": "^5.5.0",
-    "antd": "^5.21.0",
-    "react": "^18.3.0",
-    "react-dom": "^18.3.0",
-    "react-grid-layout": "^1.5.0",
-    "recharts": "^2.13.0"
+    "@ant-design/icons": "^6.2.5",
+    "antd": "^6.4.4",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-grid-layout": "^2.2.3",
+    "recharts": "^3.8.1"
   },
   "devDependencies": {
-    "@types/react": "^18.3.0",
-    "@types/react-dom": "^18.3.0",
-    "@types/react-grid-layout": "^1.3.5",
-    "@vitejs/plugin-react": "^4.3.0",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "jsdom": "^29.1.1",
     "typescript": "^5.6.0",
-    "vite": "^5.4.0"
+    "vite": "^8.0.16",
+    "vitest": "^4.1.8"
   }
 }

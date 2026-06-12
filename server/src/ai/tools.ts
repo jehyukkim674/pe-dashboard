@@ -14,6 +14,8 @@ export interface ToolContext {
 
 export interface ToolKit {
   definitions: Anthropic.Tool[];
+  // 입력은 모델이 생성한 JSON이라 핸들러마다 형태가 다르다 — 의도된 any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handlers: Record<string, (input: any) => Promise<unknown>>;
 }
 

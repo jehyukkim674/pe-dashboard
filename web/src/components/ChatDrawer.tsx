@@ -83,7 +83,7 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
   };
 
   return (
-    <Drawer title="AI 채팅" placement="right" width={420} open={open} onClose={onClose}>
+    <Drawer title="AI 채팅" placement="right" size={420} open={open} onClose={onClose}>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <div style={{ flex: 1, overflow: 'auto', paddingBottom: 12 }}>
           {items.length === 0 && (
