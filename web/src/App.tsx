@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button, ConfigProvider, Empty, Input, Layout, Menu, message, Modal, Popconfirm, Space, Tooltip, Typography, FloatButton, theme as antdTheme } from 'antd';
 import {
   BulbOutlined, CommentOutlined, CopyOutlined, DeleteOutlined, DownloadOutlined, EditOutlined,
-  FullscreenOutlined, FullscreenExitOutlined, HistoryOutlined, PlusOutlined, SyncOutlined,
-  UploadOutlined,
+  FullscreenOutlined, FullscreenExitOutlined, HistoryOutlined, PauseCircleOutlined,
+  PlayCircleOutlined, PlusOutlined, SearchOutlined, SyncOutlined, UploadOutlined,
 } from '@ant-design/icons';
 import { api } from './api';
 import type { Dashboard } from './types';
@@ -23,7 +23,9 @@ export default function App() {
   const [updateCheckCount, setUpdateCheckCount] = useState(0);
   const [dark, setDark] = useState(() => localStorage.getItem('pe-dark') === '1');
   const [tvMode, setTvMode] = useState(false);
+  const [tvRotate, setTvRotate] = useState(() => localStorage.getItem('pe-tv-rotate') === '1');
   const [logOpen, setLogOpen] = useState(false);
+  const [dashSearch, setDashSearch] = useState('');
   const [siderWidth, setSiderWidth] = useState(() => {
     const saved = Number(localStorage.getItem('pe-sider-width'));
     return saved >= 160 && saved <= 420 ? saved : 220;
@@ -79,7 +81,29 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // TV 모드 자동 순환: 켜져 있으면 20초마다 다음 대시보드로 (켬/끔은 localStorage 유지)
+  const toggleTvRotate = () => {
+    setTvRotate((r) => {
+      localStorage.setItem('pe-tv-rotate', r ? '0' : '1');
+      return !r;
+    });
+  };
+
+  useEffect(() => {
+    if (!tvMode || !tvRotate || dashboards.length < 2) return;
+    const timer = setInterval(() => {
+      setSelectedId((cur) => {
+        const i = dashboards.findIndex((d) => d.id === cur);
+        return dashboards[(i + 1) % dashboards.length].id;
+      });
+    }, 20_000);
+    return () => clearInterval(timer);
+  }, [tvMode, tvRotate, dashboards]);
+
   const selected = dashboards.find((d) => d.id === selectedId);
+  const shownDashboards = dashSearch.trim()
+    ? dashboards.filter((d) => d.name.toLowerCase().includes(dashSearch.trim().toLowerCase()))
+    : dashboards;
 
   const createDashboard = async () => {
     if (!newName.trim() || submitting) return;
@@ -188,11 +212,17 @@ export default function App() {
         <Typography.Title level={4} style={{ padding: '16px 16px 0' }}>
           PE Dashboard
         </Typography.Title>
+        <Input
+          size="small" allowClear value={dashSearch}
+          onChange={(e) => setDashSearch(e.target.value)}
+          placeholder="대시보드 검색" prefix={<SearchOutlined style={{ color: 'rgba(128,128,128,0.6)' }} />}
+          style={{ width: 'calc(100% - 32px)', margin: '8px 16px 4px' }}
+        />
         <Menu
           style={{ flex: 1, overflow: 'auto', borderInlineEnd: 'none' }}
           mode="inline"
           selectedKeys={selectedId ? [selectedId] : []}
-          items={dashboards.map((d) => ({
+          items={shownDashboards.map((d) => ({
             key: d.id,
             label: (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -286,10 +316,17 @@ export default function App() {
 
       <FloatButton.Group>
         {tvMode && (
-          <FloatButton
-            icon={<FullscreenExitOutlined />} tooltip="TV 모드 종료"
-            onClick={() => setTvMode(false)}
-          />
+          <>
+            <FloatButton
+              icon={tvRotate ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
+              tooltip={tvRotate ? '자동 순환 끄기' : '대시보드 자동 순환 (20초)'}
+              onClick={toggleTvRotate}
+            />
+            <FloatButton
+              icon={<FullscreenExitOutlined />} tooltip="TV 모드 종료"
+              onClick={() => setTvMode(false)}
+            />
+          </>
         )}
         <FloatButton
           icon={<CommentOutlined />} type="primary"
