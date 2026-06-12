@@ -9,6 +9,7 @@ import { DashboardStore } from './dashboardStore.js';
 import { CommandRegistry } from './commands/registry.js';
 import { ResultCache } from './commands/resultCache.js';
 import { configureAuditLog } from './commands/auditLog.js';
+import { writeDailyBackup } from './backup.js';
 import { PendingCommands } from './commands/pending.js';
 import { DataSourceRegistry } from './datasources/registry.js';
 import { CliSource } from './datasources/cliSource.js';
@@ -35,6 +36,9 @@ export async function startServer(
   const commands = new CommandRegistry(path.join(opts.dataDir, 'commands.json'));
   await commands.load();
   const pending = new PendingCommands();
+
+  // 하루 1개 자동 백업 (최근 7개 보관) — 실패해도 기동을 막지 않는다
+  void writeDailyBackup(path.join(opts.dataDir, 'backups'), store, commands).catch(() => {});
 
   // 같은 명령을 쓰는 위젯들과 AI 화면 컨텍스트가 실행을 공유한다 (TTL 10초)
   const commandCache = new ResultCache();
