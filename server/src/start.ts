@@ -14,6 +14,8 @@ import { PendingCommands } from './commands/pending.js';
 import { DataSourceRegistry } from './datasources/registry.js';
 import { CliSource } from './datasources/cliSource.js';
 import { HttpSource } from './datasources/httpSource.js';
+import { PgProfiles } from './datasources/pgProfiles.js';
+import { PostgresSource } from './datasources/postgresSource.js';
 import { buildTools } from './ai/tools.js';
 import { ChatService } from './ai/chatService.js';
 import { ClaudeCliAdapter } from './ai/claudeCliAdapter.js';
@@ -43,9 +45,13 @@ export async function startServer(
   // 같은 명령을 쓰는 위젯들과 AI 화면 컨텍스트가 실행을 공유한다 (TTL 10초)
   const commandCache = new ResultCache();
 
+  const pgProfiles = new PgProfiles(path.join(opts.dataDir, 'pg-profiles.json'));
+  await pgProfiles.load();
+
   const dataSources = new DataSourceRegistry();
   dataSources.register(new CliSource(commands, commandCache));
   dataSources.register(new HttpSource());
+  dataSources.register(new PostgresSource(pgProfiles));
 
   // AI_READONLY=true면 조회 전용 모드: AI는 데이터 조회·질문 응답만 가능하고
   // 대시보드 생성·수정·삭제·명령 등록이 차단된다. 기본은 편집 허용.
@@ -58,7 +64,7 @@ export async function startServer(
       ? new ChatService({ client: new Anthropic(), tools, store, commands })
       : new ClaudeCliAdapter({ store, commands, pending, toolkit: tools, readOnly: aiReadOnly, cache: commandCache });
 
-  const app = await buildApp({ store, commands, pending, dataSources, chatService, tools });
+  const app = await buildApp({ store, commands, pending, dataSources, chatService, tools, pgProfiles });
 
   if (opts.staticDir) {
     await fs.access(path.join(opts.staticDir, 'index.html')).catch(() => {

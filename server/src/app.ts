@@ -11,6 +11,8 @@ import { commandRoutes } from './routes/commands.js';
 import { widgetDataRoutes } from './routes/widgetData.js';
 import { chatRoutes } from './routes/chat.js';
 import { exportImportRoutes } from './routes/exportImport.js';
+import { pgProfileRoutes } from './routes/pgProfiles.js';
+import type { PgProfiles } from './datasources/pgProfiles.js';
 
 export interface AppDeps {
   store: DashboardStore;
@@ -19,6 +21,7 @@ export interface AppDeps {
   dataSources: DataSourceRegistry;
   chatService: ChatAdapter;
   tools: ToolKit;
+  pgProfiles: PgProfiles;
 }
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
@@ -29,5 +32,6 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   widgetDataRoutes(app, deps.dataSources);
   chatRoutes(app, deps.chatService);
   exportImportRoutes(app, deps.store, deps.commands);
+  pgProfileRoutes(app, deps.pgProfiles);
   return app;
 }

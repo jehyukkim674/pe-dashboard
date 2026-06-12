@@ -20,7 +20,7 @@ Claude Code가 설치·로그인되어 있어야 한다. (API 모드로 쓰려�
 - **AI 채팅**: 현재 보고 있는 대시보드의 위젯 데이터를 근거로 답변하고,
   대시보드를 지정하지 않은 위젯 요청은 현재 화면에 적용. 드로어 상단에서
   응답 모델(기본/haiku/sonnet/opus) 선택 가능
-- **수동 편집**: 위젯 추가/편집 모달(타입·CLI/HTTP 소스·표시 옵션), 드래그·리사이즈,
+- **수동 편집**: 위젯 추가/편집 모달(타입·CLI/HTTP/**Postgres(SELECT 전용)** 소스·표시 옵션), 드래그·리사이즈,
   갱신 주기 select(수동~5분), 사이드바에서 대시보드 이름 변경·삭제
 - **조건 알림**: 명령 실패 시/출력에 문자열 포함 시 macOS 알림
 - **내보내기/가져오기**: 대시보드·커스텀 명령을 JSON 파일로 백업·이동
@@ -63,7 +63,7 @@ GitHub Release에 업로드 (`gh release create vX.Y.Z ...`).
 
 ## 확장 포인트
 
-- 데이터 소스: `server/src/datasources/` 에 `DataSource` 구현 추가 (postgres…)
+- 데이터 소스: `server/src/datasources/` 에 `DataSource` 구현 추가
 - 위젯 타입: `web/src/components/widgets/` + `server/src/types.ts`의 `WidgetType`
 - AI 도구: `server/src/ai/tools.ts`의 definitions/handlers에 쌍 추가
 
@@ -74,3 +74,5 @@ GitHub Release에 업로드 (`gh release create vX.Y.Z ...`).
   등록 시 ⚠️ 경고와 함께 사용자 승인 필요 (`server/src/commands/safety.ts`)
 - AI의 claude CLI 실행은 읽기 전용 도구만 허용 (--allowedTools Read,Glob,Grep)
 - 모든 명령 실행은 `data/logs/commands.jsonl`에 감사 기록 (GET /api/command-log)
+- Postgres는 SELECT/WITH 단일 문만 + READ ONLY 트랜잭션 강제, 연결 문자열은 서버의
+  `pg-profiles.json`에만 저장(내보내기·대시보드 JSON에 미포함)

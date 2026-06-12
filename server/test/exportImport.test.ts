@@ -7,6 +7,7 @@ import { buildApp } from '../src/app.js';
 import { DashboardStore } from '../src/dashboardStore.js';
 import { CommandRegistry } from '../src/commands/registry.js';
 import { PendingCommands } from '../src/commands/pending.js';
+import { PgProfiles } from '../src/datasources/pgProfiles.js';
 import { DataSourceRegistry } from '../src/datasources/registry.js';
 import { buildTools } from '../src/ai/tools.js';
 import { ClaudeCliAdapter } from '../src/ai/claudeCliAdapter.js';
@@ -26,6 +27,7 @@ describe('export/import routes', () => {
     app = await buildApp({
       store, commands, pending,
       tools: toolkit,
+      pgProfiles: new PgProfiles('/tmp/pe-test-pg-profiles.json'),
       dataSources: new DataSourceRegistry(),
       chatService: new ClaudeCliAdapter({ store, commands, toolkit }),
     });

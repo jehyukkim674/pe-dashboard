@@ -24,6 +24,27 @@ export default function App() {
   const [dark, setDark] = useState(() => localStorage.getItem('pe-dark') === '1');
   const [tvMode, setTvMode] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const [siderWidth, setSiderWidth] = useState(() => {
+    const saved = Number(localStorage.getItem('pe-sider-width'));
+    return saved >= 160 && saved <= 420 ? saved : 220;
+  });
+
+  // 사이드바 오른쪽 가장자리를 드래그해 폭 조절 (160~420px, localStorage 유지)
+  const startSiderResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = siderWidth;
+    const clamp = (w: number) => Math.min(420, Math.max(160, w));
+    const onMove = (ev: MouseEvent) => setSiderWidth(clamp(startW + ev.clientX - startX));
+    const onUp = (ev: MouseEvent) => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      localStorage.setItem('pe-sider-width', String(clamp(startW + ev.clientX - startX)));
+      window.dispatchEvent(new Event('resize')); // 그리드(WidthProvider) 재계산 유도
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
 
   const toggleDark = () => {
     setDark((d) => {
@@ -155,10 +176,15 @@ export default function App() {
     <Layout style={{ minHeight: '100vh' }}>
       {!tvMode && (
       <Layout.Sider
-        theme="light" width={220}
+        theme="light" width={siderWidth}
         style={{ position: 'sticky', top: 0, height: '100vh', overflow: 'hidden' }}
       >
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
+        <div
+          onMouseDown={startSiderResize}
+          title="드래그로 폭 조절"
+          style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 5, cursor: 'col-resize', zIndex: 10 }}
+        />
         <Typography.Title level={4} style={{ padding: '16px 16px 0' }}>
           PE Dashboard
         </Typography.Title>

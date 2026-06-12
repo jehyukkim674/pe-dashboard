@@ -33,6 +33,13 @@ export const api = {
   listCommands: () => fetch('/api/commands').then((r) => json<CommandTemplate[]>(r)),
 
   exportData: () => fetch('/api/export').then((r) => json<unknown>(r)),
+  pgProfiles: () => fetch('/api/pg-profiles').then((r) => json<string[]>(r)),
+  addPgProfile: (name: string, connString: string) =>
+    fetch('/api/pg-profiles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, connString }),
+    }).then((r) => json<{ added: string }>(r)),
   commandLog: (limit = 200) =>
     fetch(`/api/command-log?limit=${limit}`).then((r) =>
       json<{ ts: string; argv: string[]; ok: boolean; exitCode: number | null; durationMs: number }[]>(r),

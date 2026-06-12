@@ -30,7 +30,11 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
   const [templates, setTemplates] = useState<CommandTemplate[]>([]);
   const [title, setTitle] = useState(widget?.title ?? '');
   const [type, setType] = useState<WidgetType>(widget?.type ?? 'table');
-  const [sourceKind, setSourceKind] = useState<'cli' | 'http'>(ds?.kind ?? 'cli');
+  const [sourceKind, setSourceKind] = useState<'cli' | 'http' | 'postgres'>(ds?.kind ?? 'cli');
+  const [pgNames, setPgNames] = useState<string[]>([]);
+  const [pgProfile, setPgProfile] = useState(ds?.profile ?? '');
+  const [pgQuery, setPgQuery] = useState(ds?.query ?? '');
+  const [newProfile, setNewProfile] = useState<{ name: string; connString: string }>();
   const [commandId, setCommandId] = useState(ds?.commandId ?? '');
   const [params, setParams] = useState<Record<string, string>>(ds?.params ?? {});
   const [url, setUrl] = useState(ds?.url ?? '');
@@ -56,7 +60,20 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
     api.listCommands()
       .then(setTemplates)
       .catch((e) => void message.error(`명령 목록 조회 실패: ${(e as Error).message}`));
+    api.pgProfiles().then(setPgNames).catch(() => {});
   }, []);
+
+  const addProfile = async () => {
+    if (!newProfile?.name.trim() || !newProfile.connString.trim()) return;
+    try {
+      await api.addPgProfile(newProfile.name.trim(), newProfile.connString.trim());
+      setPgNames(await api.pgProfiles());
+      setPgProfile(newProfile.name.trim());
+      setNewProfile(undefined);
+    } catch (e) {
+      void message.error((e as Error).message);
+    }
+  };
 
   const template = templates.find((t) => t.id === commandId);
 
@@ -98,9 +115,16 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
         const next: Record<string, string> = {};
         for (const p of template.params) next[p] = params[p].trim();
         draft.dataSource = { kind: 'cli', commandId, params: next, refreshSec: ds?.refreshSec };
-      } else {
+      } else if (sourceKind === 'http') {
         if (!/^https?:\/\//.test(url.trim())) return void message.warning('http(s):// URL을 입력하세요');
         draft.dataSource = { kind: 'http', commandId: '', params: {}, url: url.trim(), refreshSec: ds?.refreshSec };
+      } else {
+        if (!pgProfile) return void message.warning('Postgres 프로필을 선택하세요');
+        if (!/^\s*(select|with)\b/i.test(pgQuery)) return void message.warning('SELECT/WITH 쿼리만 가능합니다');
+        draft.dataSource = {
+          kind: 'postgres', commandId: '', params: {},
+          profile: pgProfile, query: pgQuery.trim(), refreshSec: ds?.refreshSec,
+        };
       }
     }
 
@@ -133,7 +157,7 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
             <Form.Item label="데이터 소스">
               <Select
                 value={sourceKind} onChange={setSourceKind}
-                options={[{ value: 'cli', label: 'CLI 명령' }, { value: 'http', label: 'HTTP(JSON API)' }]}
+                options={[{ value: 'cli', label: 'CLI 명령' }, { value: 'http', label: 'HTTP(JSON API)' }, { value: 'postgres', label: 'Postgres (SELECT)' }]}
               />
             </Form.Item>
             {sourceKind === 'cli' ? (
@@ -166,10 +190,49 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
                   </Form.Item>
                 )}
               </>
-            ) : (
+            ) : sourceKind === 'http' ? (
               <Form.Item label="URL" required>
                 <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://api.example.com/status" />
               </Form.Item>
+            ) : (
+              <>
+                <Form.Item label="연결 프로필" required>
+                  <Select
+                    value={pgProfile || undefined} onChange={setPgProfile} placeholder="프로필 선택"
+                    options={pgNames.map((n) => ({ value: n, label: n }))}
+                    popupRender={(menu) => (
+                      <>
+                        {menu}
+                        <div style={{ padding: 6 }}>
+                          <a onClick={() => setNewProfile({ name: '', connString: '' })}>+ 새 프로필 등록</a>
+                        </div>
+                      </>
+                    )}
+                  />
+                </Form.Item>
+                {newProfile && (
+                  <Form.Item label="새 프로필 (연결 문자열은 서버에만 저장됨)">
+                    <Input
+                      value={newProfile.name} placeholder="이름 (예: local)"
+                      onChange={(e) => setNewProfile({ ...newProfile, name: e.target.value })}
+                      style={{ marginBottom: 6 }}
+                    />
+                    <Input.Password
+                      value={newProfile.connString} placeholder="postgres://user:pass@host:5432/db"
+                      onChange={(e) => setNewProfile({ ...newProfile, connString: e.target.value })}
+                      onPressEnter={() => void addProfile()}
+                      style={{ marginBottom: 6 }}
+                    />
+                    <a onClick={() => void addProfile()}>등록</a>
+                  </Form.Item>
+                )}
+                <Form.Item label="SELECT 쿼리" required>
+                  <Input.TextArea
+                    rows={3} value={pgQuery} onChange={(e) => setPgQuery(e.target.value)}
+                    placeholder="SELECT status, count(*) FROM jobs GROUP BY status"
+                  />
+                </Form.Item>
+              </>
             )}
           </>
         )}

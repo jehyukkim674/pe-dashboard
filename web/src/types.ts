@@ -4,10 +4,12 @@ export type WidgetType = 'stat' | 'table' | 'chart' | 'log' | 'text' | 'status';
 export interface WidgetLayout { x: number; y: number; w: number; h: number; }
 
 export interface WidgetDataSource {
-  kind: 'cli' | 'http';
-  commandId: string; // http일 때는 빈 문자열
+  kind: 'cli' | 'http' | 'postgres';
+  commandId: string; // http/postgres일 때는 빈 문자열
   params: Record<string, string>;
   url?: string; // kind=http 전용
+  profile?: string; // kind=postgres: 연결 프로필 이름 (연결 문자열은 서버에만 저장)
+  query?: string; // kind=postgres: SELECT 쿼리
   refreshSec?: number;
 }
 
