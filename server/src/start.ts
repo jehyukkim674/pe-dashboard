@@ -7,9 +7,12 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from './app.js';
 import { DashboardStore } from './dashboardStore.js';
 import { CommandRegistry } from './commands/registry.js';
+import { ResultCache } from './commands/resultCache.js';
+import { configureAuditLog } from './commands/auditLog.js';
 import { PendingCommands } from './commands/pending.js';
 import { DataSourceRegistry } from './datasources/registry.js';
 import { CliSource } from './datasources/cliSource.js';
+import { HttpSource } from './datasources/httpSource.js';
 import { buildTools } from './ai/tools.js';
 import { ChatService } from './ai/chatService.js';
 import { ClaudeCliAdapter } from './ai/claudeCliAdapter.js';
@@ -25,14 +28,20 @@ export interface StartOptions {
 export async function startServer(
   opts: StartOptions,
 ): Promise<{ app: FastifyInstance; port: number }> {
+  configureAuditLog(path.join(opts.dataDir, 'logs', 'commands.jsonl'));
+
   const store = new DashboardStore(path.join(opts.dataDir, 'dashboards'));
   await store.init();
   const commands = new CommandRegistry(path.join(opts.dataDir, 'commands.json'));
   await commands.load();
   const pending = new PendingCommands();
 
+  // 같은 명령을 쓰는 위젯들과 AI 화면 컨텍스트가 실행을 공유한다 (TTL 10초)
+  const commandCache = new ResultCache();
+
   const dataSources = new DataSourceRegistry();
-  dataSources.register(new CliSource(commands));
+  dataSources.register(new CliSource(commands, commandCache));
+  dataSources.register(new HttpSource());
 
   // AI_READONLY=true면 조회 전용 모드: AI는 데이터 조회·질문 응답만 가능하고
   // 대시보드 생성·수정·삭제·명령 등록이 차단된다. 기본은 편집 허용.
@@ -43,7 +52,7 @@ export async function startServer(
   const chatService: ChatAdapter =
     process.env.CHAT_ADAPTER === 'api'
       ? new ChatService({ client: new Anthropic(), tools, store, commands })
-      : new ClaudeCliAdapter({ store, commands, toolkit: tools, readOnly: aiReadOnly });
+      : new ClaudeCliAdapter({ store, commands, toolkit: tools, readOnly: aiReadOnly, cache: commandCache });
 
   const app = await buildApp({ store, commands, pending, dataSources, chatService });
 

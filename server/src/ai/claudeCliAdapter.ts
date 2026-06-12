@@ -2,6 +2,7 @@ import type { DashboardStore } from '../dashboardStore.js';
 import type { CommandRegistry } from '../commands/registry.js';
 import type { CommandResult, Dashboard } from '../types.js';
 import { runArgv } from '../commands/runner.js';
+import { ResultCache } from '../commands/resultCache.js';
 import type { ToolKit } from './tools.js';
 import type { ChatAdapter, ChatContext, ChatEvent } from './adapter.js';
 import { applyOperations, type Operation } from './operations.js';
@@ -29,6 +30,7 @@ interface Deps {
   toolkit: ToolKit;
   exec?: Exec; // 테스트 주입용. 기본 runArgv
   readOnly?: boolean; // 조회 전용 모드: AI의 변경 작업(operations)을 적용하지 않는다
+  cache?: ResultCache; // 위젯 데이터 캐시. CliSource와 공유하면 화면 컨텍스트가 재실행을 피한다
 }
 
 interface Turn {
@@ -41,9 +43,11 @@ interface Turn {
 export class ClaudeCliAdapter implements ChatAdapter {
   private readonly history = new Map<string, Turn[]>();
   private readonly exec: Exec;
+  private readonly cache: ResultCache;
 
   constructor(private readonly deps: Deps) {
     this.exec = deps.exec ?? runArgv;
+    this.cache = deps.cache ?? new ResultCache();
   }
 
   async chat(
@@ -177,7 +181,7 @@ export class ClaudeCliAdapter implements ChatAdapter {
       cliWidgets.map(async (w) => {
         try {
           const argv = this.deps.commands.buildArgv(w.dataSource!.commandId, w.dataSource!.params);
-          const result = await this.exec(argv, WIDGET_DATA_TIMEOUT_MS);
+          const result = await this.cache.run(argv, () => this.exec(argv, WIDGET_DATA_TIMEOUT_MS));
           const body = result.ok
             ? result.stdout.slice(0, WIDGET_DATA_MAX_CHARS)
             : `(조회 실패: ${result.error ?? '알 수 없는 오류'})`;

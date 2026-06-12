@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import type { CommandResult } from '../types.js';
+import { logCommand } from './auditLog.js';
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_BUFFER = 4 * 1024 * 1024;
@@ -10,6 +11,7 @@ export function runArgv(argv: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise
       ok: false, exitCode: null, stdout: '', stderr: '', error: 'argv가 비어 있습니다.',
     });
   }
+  const startedAt = Date.now();
   return new Promise((resolve) => {
     execFile(
       argv[0],
@@ -28,6 +30,7 @@ export function runArgv(argv: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise
         } catch {
           // JSON이 아니면 raw stdout만 사용
         }
+        logCommand({ argv, ok: result.ok, exitCode: result.exitCode, durationMs: Date.now() - startedAt });
         resolve(result);
       },
     );

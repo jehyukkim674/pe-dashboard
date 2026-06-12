@@ -8,10 +8,17 @@ export interface WidgetLayout {
 }
 
 export interface WidgetDataSource {
-  kind: 'cli'; // 확장: 'postgres' | 'http'
-  commandId: string;
+  kind: 'cli' | 'http'; // 확장: 'postgres'
+  commandId: string; // http일 때는 빈 문자열
   params: Record<string, string>;
+  url?: string; // kind=http 전용
   refreshSec?: number;
+}
+
+// 위젯 조건 알림: fail=명령 실패 시, contains=출력에 pattern 포함 시
+export interface WidgetAlert {
+  on: 'fail' | 'contains';
+  pattern?: string;
 }
 
 export interface Widget {
@@ -21,6 +28,7 @@ export interface Widget {
   layout: WidgetLayout;
   dataSource?: WidgetDataSource; // text 위젯은 없음
   display?: Record<string, unknown>;
+  alert?: WidgetAlert;
 }
 
 export interface Dashboard {
