@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs';
 import type { CommandTemplate } from '../types.js';
+import { assertSafeArgv } from './safety.js';
 
 const BUILTIN: CommandTemplate[] = [
   {
@@ -65,6 +66,7 @@ export function validateTemplate(template: CommandTemplate): void {
   if (undeclared.length > 0) {
     throw new Error(`undeclared placeholder in argv: ${undeclared.join(', ')}`);
   }
+  assertSafeArgv(template.argv);
 }
 
 export class CommandRegistry {
@@ -103,7 +105,7 @@ export class CommandRegistry {
   buildArgv(id: string, params: Record<string, string>): string[] {
     const template = this.get(id);
     if (!template) throw new Error(`unknown command: ${id}`);
-    return template.argv.map((part) =>
+    const argv = template.argv.map((part) =>
       part.replace(/\{(\w+)\}/g, (_, name: string) => {
         const value = params[name];
         if (value === undefined) throw new Error(`missing param: ${name}`);
@@ -113,5 +115,8 @@ export class CommandRegistry {
         return value;
       }),
     );
+    // 파라미터 치환 결과까지 포함한 최종 argv를 한 번 더 검사한다.
+    assertSafeArgv(argv);
+    return argv;
   }
 }

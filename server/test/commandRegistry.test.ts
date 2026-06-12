@@ -79,4 +79,53 @@ describe('CommandRegistry', () => {
       }),
     ).rejects.toThrow(/undeclared placeholder/);
   });
+
+  describe('위험 명령 차단', () => {
+    it('rejects registration of dangerous binaries', async () => {
+      await expect(
+        registry.register({ id: 'rm_tmp', description: 'x', argv: ['rm', '-rf', '{p}'], params: ['p'] }),
+      ).rejects.toThrow(/차단/);
+      await expect(
+        registry.register({ id: 'as_root', description: 'x', argv: ['sudo', 'ls'], params: [] }),
+      ).rejects.toThrow(/차단/);
+      await expect(
+        registry.register({ id: 'via_shell', description: 'x', argv: ['bash', '-c', 'ls'], params: [] }),
+      ).rejects.toThrow(/차단/);
+    });
+
+    it('rejects registration of mutating subcommands', async () => {
+      await expect(
+        registry.register({
+          id: 'git_push', description: 'x', argv: ['git', '-C', '{p}', 'push'], params: ['p'],
+        }),
+      ).rejects.toThrow(/차단/);
+      await expect(
+        registry.register({
+          id: 'k_delete', description: 'x', argv: ['kubectl', 'delete', 'pod', '{n}'], params: ['n'],
+        }),
+      ).rejects.toThrow(/차단/);
+      await expect(
+        registry.register({
+          id: 'argo_sync', description: 'x', argv: ['argocd', 'app', 'sync', '{app}'], params: ['app'],
+        }),
+      ).rejects.toThrow(/차단/);
+    });
+
+    it('rejects dangerous tokens smuggled in via param values at build time', () => {
+      expect(() => registry.buildArgv('argocd_app_get', { app: 'delete' })).toThrow(/차단/);
+    });
+
+    it('still allows builtin read-only templates', () => {
+      expect(registry.buildArgv('gh_pr_list', { repo: 'org/repo' })[0]).toBe('gh');
+      expect(registry.buildArgv('git_log', { repoPath: '/tmp/x' })[0]).toBe('git');
+      expect(registry.buildArgv('port_check', { port: '8080' })[0]).toBe('lsof');
+    });
+
+    it('still allows read-only custom templates', async () => {
+      await registry.register({
+        id: 'docker_ps', description: '컨테이너 목록', argv: ['docker', 'ps', '--format', 'json'], params: [],
+      });
+      expect(registry.buildArgv('docker_ps', {})[0]).toBe('docker');
+    });
+  });
 });
