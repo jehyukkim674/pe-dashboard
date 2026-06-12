@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Form, Input, Modal, Select, Typography, message } from 'antd';
 import { api } from '../api';
 import type { CommandTemplate, Widget, WidgetAlert, WidgetType } from '../types';
+import { TABLE_PREF_KEYS } from './widgets/tableFormat';
 
 // 저장 대상: id/layout은 그리드가 관리하므로 제외
 export type WidgetDraft = Omit<Widget, 'id' | 'layout'>;
@@ -90,7 +91,14 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
         return { metric: statMetric, ...(statMetric === 'path' && { path: statPath }), suffix: statSuffix };
       case 'table': {
         const columns = tableColumns.split(',').map((c) => c.trim()).filter(Boolean);
-        return columns.length > 0 ? { columns } : {};
+        // 폭·필터·정렬·숨김 등 사용자 설정은 편집 모달을 거쳐도 유지한다
+        const prefs: Record<string, unknown> = {};
+        if (widget?.type === 'table') {
+          for (const key of TABLE_PREF_KEYS) {
+            if (widget.display?.[key] != null) prefs[key] = widget.display[key];
+          }
+        }
+        return { ...(columns.length > 0 && { columns }), ...prefs };
       }
       case 'chart':
         return { xKey: chartXKey, yKey: chartYKey, chartType };

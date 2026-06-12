@@ -83,5 +83,6 @@ export function relativeTime(from: number, now: number): string {
   if (sec < 10) return '방금';
   if (sec < 60) return `${sec}초 전`;
   if (sec < 3600) return `${Math.floor(sec / 60)}분 전`;
-  return `${Math.floor(sec / 3600)}시간 전`;
+  if (sec < 86_400) return `${Math.floor(sec / 3600)}시간 전`;
+  return `${Math.floor(sec / 86_400)}일 전`;
 }

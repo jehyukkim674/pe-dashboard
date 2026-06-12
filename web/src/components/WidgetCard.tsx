@@ -32,12 +32,13 @@ const REFRESH_OPTIONS = [
   { value: 300, label: '5분' },
 ];
 
-export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, onDuplicate, highlight }: {
+export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, onDuplicate, onChangeDisplay, highlight }: {
   widget: Widget;
   onRemove: () => void;
   onChangeRefresh: (refreshSec?: number) => void;
   onEdit: (draft: WidgetDraft) => void;
   onDuplicate: () => void;
+  onChangeDisplay?: (display: Record<string, unknown>) => void;
   highlight?: boolean;
 }) {
   const { result, lastGood, loading, reload, updatedAt } = useWidgetData(widget.dataSource);
@@ -98,7 +99,7 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, 
     }
     switch (widget.type) {
       case 'stat': return <StatWidget result={shown} display={widget.display} />;
-      case 'table': return <TableWidget result={shown} display={widget.display} />;
+      case 'table': return <TableWidget result={shown} display={widget.display} onDisplayChange={onChangeDisplay} />;
       case 'chart': return <ChartWidget result={shown} display={widget.display} />;
       case 'log': return <LogWidget result={shown} />;
       case 'status': return <StatusWidget result={shown} display={widget.display} />;

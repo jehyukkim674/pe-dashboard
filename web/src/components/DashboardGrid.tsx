@@ -81,6 +81,14 @@ export default function DashboardGrid({ dashboard, onChanged }: Props) {
       .catch((e) => void message.error(`갱신 주기 변경 실패: ${(e as Error).message}`));
   };
 
+  // 위젯 내부 상호작용(컬럼 폭 조절 등)으로 바뀐 display만 저장
+  const changeDisplay = (widgetId: string, display: Record<string, unknown>) => {
+    const widgets = dashboard.widgets.map((w) => (w.id === widgetId ? { ...w, display } : w));
+    api.saveDashboard({ ...dashboard, widgets })
+      .then(() => onChanged())
+      .catch((e) => void message.error(`표시 설정 저장 실패: ${(e as Error).message}`));
+  };
+
   // 편집: id·layout은 유지하고 나머지를 드래프트로 교체 (dataSource/alert 제거도 반영)
   const editWidget = (widgetId: string, draft: WidgetDraft) => {
     const widgets = dashboard.widgets.map((w) =>
@@ -158,6 +166,7 @@ export default function DashboardGrid({ dashboard, onChanged }: Props) {
               onChangeRefresh={(sec) => changeRefresh(widget.id, sec)}
               onEdit={(draft) => editWidget(widget.id, draft)}
               onDuplicate={() => duplicateWidget(widget.id)}
+              onChangeDisplay={(display) => changeDisplay(widget.id, display)}
               highlight={widget.id === highlightId}
             />
           </div>
