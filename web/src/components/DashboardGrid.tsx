@@ -31,6 +31,12 @@ interface Props {
 
 export default function DashboardGrid({ dashboard, onChanged }: Props) {
   const [adding, setAdding] = useState(false);
+  const [highlightId, setHighlightId] = useState<string>();
+
+  const flashHighlight = (id: string) => {
+    setHighlightId(id);
+    setTimeout(() => setHighlightId((cur) => (cur === id ? undefined : cur)), 2500);
+  };
   const layout = useMemo<RglItem[]>(
     () => dashboard.widgets.map((w) => ({ i: w.id, ...w.layout })),
     [dashboard],
@@ -110,7 +116,10 @@ export default function DashboardGrid({ dashboard, onChanged }: Props) {
       layout: { ...findFreePosition(source.layout.w, source.layout.h), w: source.layout.w, h: source.layout.h },
     };
     api.saveDashboard({ ...dashboard, widgets: [...dashboard.widgets, copy] })
-      .then(() => onChanged())
+      .then(() => {
+        onChanged();
+        flashHighlight(copy.id);
+      })
       .catch((e) => void message.error(`위젯 복제 실패: ${(e as Error).message}`));
   };
 
@@ -122,7 +131,10 @@ export default function DashboardGrid({ dashboard, onChanged }: Props) {
       ...draft,
     };
     api.saveDashboard({ ...dashboard, widgets: [...dashboard.widgets, widget] })
-      .then(() => onChanged())
+      .then(() => {
+        onChanged();
+        flashHighlight(widget.id);
+      })
       .catch((e) => void message.error(`위젯 추가 실패: ${(e as Error).message}`));
   };
 
@@ -146,6 +158,7 @@ export default function DashboardGrid({ dashboard, onChanged }: Props) {
               onChangeRefresh={(sec) => changeRefresh(widget.id, sec)}
               onEdit={(draft) => editWidget(widget.id, draft)}
               onDuplicate={() => duplicateWidget(widget.id)}
+              highlight={widget.id === highlightId}
             />
           </div>
         ))}

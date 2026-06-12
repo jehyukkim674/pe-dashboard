@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Card, Popconfirm, Select, Skeleton, Spin, Tooltip, message } from 'antd';
-import { CopyOutlined, DeleteOutlined, EditOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Alert, Card, Modal, Popconfirm, Select, Skeleton, Spin, Tooltip, message } from 'antd';
+import { CopyOutlined, DeleteOutlined, EditOutlined, ExpandOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { Widget } from '../types';
 import { relativeTime, useNow, useWidgetData } from '../hooks/useWidgetData';
 import WidgetEditModal, { type WidgetDraft } from './WidgetEditModal';
@@ -32,15 +32,17 @@ const REFRESH_OPTIONS = [
   { value: 300, label: '5분' },
 ];
 
-export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, onDuplicate }: {
+export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, onDuplicate, highlight }: {
   widget: Widget;
   onRemove: () => void;
   onChangeRefresh: (refreshSec?: number) => void;
   onEdit: (draft: WidgetDraft) => void;
   onDuplicate: () => void;
+  highlight?: boolean;
 }) {
   const { result, lastGood, loading, reload, updatedAt } = useWidgetData(widget.dataSource);
   const [editOpen, setEditOpen] = useState(false);
+  const [rawOpen, setRawOpen] = useState(false);
   const now = useNow();
 
   // AI가 설정한 비표준 주기(예: 15초)도 select에 그대로 보이게 동적 옵션 추가
@@ -106,6 +108,7 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, 
   return (
     <Card
       size="small"
+      className={highlight ? 'widget-new' : undefined}
       title={widget.alert ? `🔔 ${widget.title}` : widget.title}
       style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
       styles={{ body: { flex: 1, overflow: 'hidden' } }}
@@ -126,6 +129,11 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, 
             {!loading && widget.dataSource && (
               <Tooltip title="지금 새로고침">
                 <ReloadOutlined onClick={reload} style={{ cursor: 'pointer' }} />
+              </Tooltip>
+            )}
+            {widget.dataSource && (
+              <Tooltip title="원본 데이터 보기">
+                <ExpandOutlined onClick={() => setRawOpen(true)} style={{ cursor: 'pointer' }} />
               </Tooltip>
             )}
             <Tooltip title="위젯 편집">
@@ -165,6 +173,18 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, 
       </div>
       {editOpen && (
         <WidgetEditModal widget={widget} onClose={() => setEditOpen(false)} onSave={onEdit} />
+      )}
+      {rawOpen && (
+        <Modal
+          title={`원본 데이터 — ${widget.title}`} open onCancel={() => setRawOpen(false)}
+          footer={null} width={720}
+        >
+          <pre style={{ maxHeight: '60vh', overflow: 'auto', fontSize: 12, margin: 0 }}>
+            {shown?.json !== undefined
+              ? JSON.stringify(shown.json, null, 2)
+              : (shown?.stdout || shown?.stderr || '(데이터 없음)')}
+          </pre>
+        </Modal>
       )}
     </Card>
   );
