@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Button, Empty, Input, Layout, Menu, message, Modal, Popconfirm, Typography, FloatButton } from 'antd';
-import { CommentOutlined, DeleteOutlined, EditOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
+import { Button, ConfigProvider, Empty, Input, Layout, Menu, message, Modal, Popconfirm, Typography, FloatButton, theme as antdTheme } from 'antd';
+import {
+  BulbOutlined, CommentOutlined, DeleteOutlined, EditOutlined, FullscreenOutlined,
+  FullscreenExitOutlined, PlusOutlined, SyncOutlined,
+} from '@ant-design/icons';
 import { api } from './api';
 import type { Dashboard } from './types';
 import DashboardGrid from './components/DashboardGrid';
@@ -16,6 +19,15 @@ export default function App() {
   const [renaming, setRenaming] = useState<{ id: string; name: string }>();
   const [submitting, setSubmitting] = useState(false);
   const [updateCheckCount, setUpdateCheckCount] = useState(0);
+  const [dark, setDark] = useState(() => localStorage.getItem('pe-dark') === '1');
+  const [tvMode, setTvMode] = useState(false);
+
+  const toggleDark = () => {
+    setDark((d) => {
+      localStorage.setItem('pe-dark', d ? '0' : '1');
+      return !d;
+    });
+  };
 
   const refresh = useCallback(async (selectId?: string) => {
     const list = await api.listDashboards();
@@ -73,7 +85,9 @@ export default function App() {
   };
 
   return (
+    <ConfigProvider theme={{ algorithm: dark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm }}>
     <Layout style={{ minHeight: '100vh' }}>
+      {!tvMode && (
       <Layout.Sider theme="light" width={220}>
         <Typography.Title level={4} style={{ padding: '16px 16px 0' }}>
           PE Dashboard
@@ -124,9 +138,24 @@ export default function App() {
         >
           업데이트 확인
         </Button>
+        <Button
+          type="text" icon={<BulbOutlined />} block
+          style={{ width: 'calc(100% - 32px)', margin: '8px 16px 0' }}
+          onClick={toggleDark}
+        >
+          {dark ? '라이트 모드' : '다크 모드'}
+        </Button>
+        <Button
+          type="text" icon={<FullscreenOutlined />} block
+          style={{ width: 'calc(100% - 32px)', margin: '8px 16px 0' }}
+          onClick={() => setTvMode(true)}
+        >
+          TV 모드
+        </Button>
       </Layout.Sider>
+      )}
 
-      <Layout.Content style={{ padding: 16, background: '#f5f5f5' }}>
+      <Layout.Content style={{ padding: 16, background: dark ? '#101010' : '#f5f5f5' }}>
         {selected ? (
           <DashboardGrid dashboard={selected} onChanged={() => refresh()} />
         ) : (
@@ -134,10 +163,18 @@ export default function App() {
         )}
       </Layout.Content>
 
-      <FloatButton
-        icon={<CommentOutlined />} type="primary"
-        tooltip="AI 채팅" onClick={() => setChatOpen(true)}
-      />
+      <FloatButton.Group>
+        {tvMode && (
+          <FloatButton
+            icon={<FullscreenExitOutlined />} tooltip="TV 모드 종료"
+            onClick={() => setTvMode(false)}
+          />
+        )}
+        <FloatButton
+          icon={<CommentOutlined />} type="primary"
+          tooltip="AI 채팅" onClick={() => setChatOpen(true)}
+        />
+      </FloatButton.Group>
       <ChatDrawer
         open={chatOpen} onClose={() => setChatOpen(false)}
         onDashboardsChanged={refresh} dashboardId={selectedId}
@@ -167,5 +204,6 @@ export default function App() {
         />
       </Modal>
     </Layout>
+    </ConfigProvider>
   );
 }
