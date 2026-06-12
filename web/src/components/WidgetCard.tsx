@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Card, Popconfirm, Select, Spin, Tooltip } from 'antd';
-import { CodeOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
-import type { Widget, WidgetDataSource } from '../types';
-import { useWidgetData } from '../hooks/useWidgetData';
-import WidgetSourceModal from './WidgetSourceModal';
+import { DeleteOutlined, EditOutlined, ReloadOutlined } from '@ant-design/icons';
+import type { Widget } from '../types';
+import { relativeTime, useNow, useWidgetData } from '../hooks/useWidgetData';
+import WidgetEditModal, { type WidgetDraft } from './WidgetEditModal';
 import StatWidget from './widgets/StatWidget';
 import TableWidget from './widgets/TableWidget';
 import ChartWidget from './widgets/ChartWidget';
@@ -20,14 +20,36 @@ const REFRESH_OPTIONS = [
   { value: 300, label: '5분' },
 ];
 
-export default function WidgetCard({ widget, onRemove, onChangeRefresh, onChangeDataSource }: {
+export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit }: {
   widget: Widget;
   onRemove: () => void;
   onChangeRefresh: (refreshSec?: number) => void;
-  onChangeDataSource: (ds: WidgetDataSource) => void;
+  onEdit: (draft: WidgetDraft) => void;
 }) {
-  const { result, loading, reload } = useWidgetData(widget.dataSource);
-  const [sourceOpen, setSourceOpen] = useState(false);
+  const { result, loading, reload, updatedAt } = useWidgetData(widget.dataSource);
+  const [editOpen, setEditOpen] = useState(false);
+  const now = useNow();
+
+  // 조건 알림: 조건이 '불충족→충족'으로 바뀌는 순간에만 1회 발송 (폴링마다 반복 금지)
+  const alertedRef = useRef(false);
+  useEffect(() => {
+    const rule = widget.alert;
+    if (!rule || !result || typeof Notification === 'undefined') return;
+    const matched = rule.on === 'fail'
+      ? !result.ok
+      : !!rule.pattern && (result.stdout + result.stderr).includes(rule.pattern);
+    if (matched && !alertedRef.current) {
+      if (Notification.permission === 'default') void Notification.requestPermission();
+      if (Notification.permission !== 'denied') {
+        new Notification(`PE Dashboard — ${widget.title}`, {
+          body: rule.on === 'fail'
+            ? (result.error ?? '명령이 실패했습니다')
+            : `출력에 "${rule.pattern}" 가 포함되었습니다`,
+        });
+      }
+    }
+    alertedRef.current = matched;
+  }, [result, widget.alert, widget.title]);
 
   const body = (() => {
     if (widget.type === 'text') return <TextWidget display={widget.display} />;
@@ -65,24 +87,30 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onChange
               <ReloadOutlined onClick={reload} style={{ cursor: 'pointer' }} />
             </Tooltip>
           )}
-          {widget.dataSource && (
-            <Tooltip title="실행 명령 보기·수정">
-              <CodeOutlined onClick={() => setSourceOpen(true)} style={{ cursor: 'pointer' }} />
-            </Tooltip>
-          )}
+          <Tooltip title="위젯 편집">
+            <EditOutlined onClick={() => setEditOpen(true)} style={{ cursor: 'pointer' }} />
+          </Tooltip>
           <Popconfirm title="위젯을 삭제할까요?" onConfirm={onRemove} okText="삭제" cancelText="취소">
             <DeleteOutlined style={{ cursor: 'pointer' }} />
           </Popconfirm>
         </span>
       }
     >
-      <div className="widget-body" style={{ height: '100%', overflow: 'auto' }}>{body}</div>
-      {sourceOpen && widget.dataSource && (
-        <WidgetSourceModal
-          dataSource={widget.dataSource}
-          onClose={() => setSourceOpen(false)}
-          onSave={onChangeDataSource}
-        />
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <div className="widget-body" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>{body}</div>
+        {widget.dataSource && updatedAt && (
+          <div
+            style={{
+              flexShrink: 0, fontSize: 11, textAlign: 'right', paddingTop: 2,
+              color: result?.ok === false ? '#ff4d4f' : 'rgba(128,128,128,0.65)',
+            }}
+          >
+            {result?.ok === false ? '실패' : '정상'} · {relativeTime(updatedAt, now)} 갱신
+          </div>
+        )}
+      </div>
+      {editOpen && (
+        <WidgetEditModal widget={widget} onClose={() => setEditOpen(false)} onSave={onEdit} />
       )}
     </Card>
   );

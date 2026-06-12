@@ -4,10 +4,17 @@ export type WidgetType = 'stat' | 'table' | 'chart' | 'log' | 'text';
 export interface WidgetLayout { x: number; y: number; w: number; h: number; }
 
 export interface WidgetDataSource {
-  kind: 'cli';
-  commandId: string;
+  kind: 'cli' | 'http';
+  commandId: string; // http일 때는 빈 문자열
   params: Record<string, string>;
+  url?: string; // kind=http 전용
   refreshSec?: number;
+}
+
+// 위젯 조건 알림: fail=명령 실패 시, contains=출력에 pattern 포함 시
+export interface WidgetAlert {
+  on: 'fail' | 'contains';
+  pattern?: string;
 }
 
 export interface Widget {
@@ -17,6 +24,7 @@ export interface Widget {
   layout: WidgetLayout;
   dataSource?: WidgetDataSource;
   display?: Record<string, unknown>;
+  alert?: WidgetAlert;
 }
 
 export interface Dashboard { id: string; name: string; widgets: Widget[]; }
