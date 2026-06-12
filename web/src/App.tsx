@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button, ConfigProvider, Empty, Input, Layout, Menu, message, Modal, Popconfirm, Typography, FloatButton, theme as antdTheme } from 'antd';
 import {
-  BulbOutlined, CommentOutlined, DeleteOutlined, EditOutlined, FullscreenOutlined,
-  FullscreenExitOutlined, PlusOutlined, SyncOutlined,
+  BulbOutlined, CommentOutlined, DeleteOutlined, DownloadOutlined, EditOutlined,
+  FullscreenOutlined, FullscreenExitOutlined, PlusOutlined, SyncOutlined, UploadOutlined,
 } from '@ant-design/icons';
 import { api } from './api';
 import type { Dashboard } from './types';
@@ -84,6 +84,42 @@ export default function App() {
     }
   };
 
+  // 대시보드·커스텀 명령을 JSON 파일로 백업 (패키징 앱 ↔ dev 데이터 이동용)
+  const exportData = async () => {
+    try {
+      const bundle = await api.exportData();
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `pe-dashboard-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      void message.error(`내보내기 실패: ${(e as Error).message}`);
+    }
+  };
+
+  const importData = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json,.json';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const result = await api.importData(JSON.parse(await file.text()));
+        void message.success(`가져오기 완료: 대시보드 ${result.dashboards}개, 명령 ${result.commands}개`);
+        if (result.skipped.length > 0) {
+          void message.warning(`건너뜀: ${result.skipped.join('; ')}`);
+        }
+        await refresh();
+      } catch (e) {
+        void message.error(`가져오기 실패: ${(e as Error).message}`);
+      }
+    };
+    input.click();
+  };
+
   return (
     <ConfigProvider theme={{ algorithm: dark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm }}>
     <Layout style={{ minHeight: '100vh' }}>
@@ -151,6 +187,20 @@ export default function App() {
           onClick={() => setTvMode(true)}
         >
           TV 모드
+        </Button>
+        <Button
+          type="text" icon={<DownloadOutlined />} block
+          style={{ width: 'calc(100% - 32px)', margin: '8px 16px 0' }}
+          onClick={() => void exportData()}
+        >
+          내보내기
+        </Button>
+        <Button
+          type="text" icon={<UploadOutlined />} block
+          style={{ width: 'calc(100% - 32px)', margin: '8px 16px 0' }}
+          onClick={importData}
+        >
+          가져오기
         </Button>
       </Layout.Sider>
       )}

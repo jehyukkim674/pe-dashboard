@@ -32,6 +32,14 @@ export const api = {
 
   listCommands: () => fetch('/api/commands').then((r) => json<CommandTemplate[]>(r)),
 
+  exportData: () => fetch('/api/export').then((r) => json<unknown>(r)),
+  importData: (bundle: unknown) =>
+    fetch('/api/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bundle),
+    }).then((r) => json<{ dashboards: number; commands: number; skipped: string[] }>(r)),
+
   confirmCommand: (pendingId: string) =>
     fetch(`/api/commands/pending/${pendingId}/confirm`, { method: 'POST' }).then((r) =>
       json<{ registered: string }>(r),
