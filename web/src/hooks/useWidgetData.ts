@@ -5,6 +5,7 @@ import type { CommandResult, WidgetDataSource } from '../types';
 export function useWidgetData(dataSource?: WidgetDataSource) {
   const [result, setResult] = useState<CommandResult>();
   const [loading, setLoading] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
   const key = JSON.stringify(dataSource ?? null);
 
   useEffect(() => {
@@ -38,7 +39,10 @@ export function useWidgetData(dataSource?: WidgetDataSource) {
       if (timer) clearInterval(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [key, reloadTick]);
 
-  return { result, loading };
+  // 수동 새로고침: effect를 재실행해 즉시 로드하고 폴링 타이머도 리셋한다
+  const reload = () => setReloadTick((t) => t + 1);
+
+  return { result, loading, reload };
 }

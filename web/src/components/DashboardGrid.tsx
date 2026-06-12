@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { message } from 'antd';
 import RGL from 'react-grid-layout';
 import { api } from '../api';
-import type { Dashboard } from '../types';
+import type { Dashboard, WidgetDataSource } from '../types';
 import WidgetCard from './WidgetCard';
 
 // @types/react-grid-layout uses `export = ReactGridLayout` (CJS-style).
@@ -52,15 +52,40 @@ export default function DashboardGrid({ dashboard, onChanged }: Props) {
       .catch((e) => void message.error(`위젯 삭제 실패: ${(e as Error).message}`));
   };
 
+  const changeRefresh = (widgetId: string, refreshSec?: number) => {
+    const widgets = dashboard.widgets.map((w) =>
+      w.id === widgetId && w.dataSource
+        ? { ...w, dataSource: { ...w.dataSource, refreshSec } }
+        : w,
+    );
+    api.saveDashboard({ ...dashboard, widgets })
+      .then(() => onChanged())
+      .catch((e) => void message.error(`갱신 주기 변경 실패: ${(e as Error).message}`));
+  };
+
+  const changeDataSource = (widgetId: string, dataSource: WidgetDataSource) => {
+    const widgets = dashboard.widgets.map((w) =>
+      w.id === widgetId ? { ...w, dataSource } : w,
+    );
+    api.saveDashboard({ ...dashboard, widgets })
+      .then(() => onChanged())
+      .catch((e) => void message.error(`실행 명령 변경 실패: ${(e as Error).message}`));
+  };
+
   return (
     <Grid
       layout={layout} cols={12} rowHeight={60} margin={[12, 12]}
       onDragStop={handleLayoutChange} onResizeStop={handleLayoutChange}
-      draggableCancel=".widget-body"
+      draggableCancel=".widget-body,.widget-actions,.ant-select-dropdown,.ant-popover"
     >
       {dashboard.widgets.map((widget) => (
         <div key={widget.id}>
-          <WidgetCard widget={widget} onRemove={() => removeWidget(widget.id)} />
+          <WidgetCard
+            widget={widget}
+            onRemove={() => removeWidget(widget.id)}
+            onChangeRefresh={(sec) => changeRefresh(widget.id, sec)}
+            onChangeDataSource={(ds) => changeDataSource(widget.id, ds)}
+          />
         </div>
       ))}
     </Grid>

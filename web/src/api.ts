@@ -1,4 +1,4 @@
-import type { ChatEvent, CommandResult, Dashboard, WidgetDataSource } from './types';
+import type { ChatEvent, CommandResult, CommandTemplate, Dashboard, WidgetDataSource } from './types';
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
@@ -29,6 +29,8 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(ds),
     }).then((r) => json<CommandResult>(r)),
+
+  listCommands: () => fetch('/api/commands').then((r) => json<CommandTemplate[]>(r)),
 
   confirmCommand: (pendingId: string) =>
     fetch(`/api/commands/pending/${pendingId}/confirm`, { method: 'POST' }).then((r) =>
