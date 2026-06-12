@@ -2,6 +2,7 @@ import pg from 'pg';
 import type { CommandResult, WidgetDataSource } from '../types.js';
 import type { DataSource } from './registry.js';
 import type { PgProfiles } from './pgProfiles.js';
+import { logCommand } from '../commands/auditLog.js';
 
 const QUERY_TIMEOUT_MS = 10_000;
 const MAX_ROWS = 500;
@@ -44,6 +45,7 @@ export class PostgresSource implements DataSource {
     if (!profile || !query) {
       return { ok: false, exitCode: null, stdout: '', stderr: '', error: 'profile과 query가 필요합니다' };
     }
+    const startedAt = Date.now();
     try {
       assertReadOnlyQuery(query);
       const client = await this.pool(profile).connect();
@@ -52,6 +54,7 @@ export class PostgresSource implements DataSource {
         const res = await client.query(query);
         await client.query('ROLLBACK');
         const rows = res.rows.slice(0, MAX_ROWS);
+        logCommand({ argv: [`pg:${profile}`, query], ok: true, exitCode: 0, durationMs: Date.now() - startedAt });
         return {
           ok: true, exitCode: 0, stderr: '',
           stdout: JSON.stringify(rows).slice(0, 1024 * 1024),
@@ -62,6 +65,7 @@ export class PostgresSource implements DataSource {
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
+      logCommand({ argv: [`pg:${profile}`, query], ok: false, exitCode: null, durationMs: Date.now() - startedAt });
       return { ok: false, exitCode: null, stdout: '', stderr: '', error: message };
     }
   }

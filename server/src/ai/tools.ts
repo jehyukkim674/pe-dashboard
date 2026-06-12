@@ -31,9 +31,12 @@ const layoutSchema = {
 const dataSourceSchema = {
   type: 'object' as const,
   properties: {
-    kind: { type: 'string', enum: ['cli'] },
+    kind: { type: 'string', enum: ['cli', 'http', 'postgres'] },
     commandId: { type: 'string' },
     params: { type: 'object', additionalProperties: { type: 'string' } },
+    url: { type: 'string' },
+    profile: { type: 'string' },
+    query: { type: 'string' },
     refreshSec: { type: 'number' },
   },
   required: ['kind', 'commandId', 'params'],
@@ -234,6 +237,6 @@ export function buildTools(ctx: ToolContext, opts: { readOnly?: boolean } = {}):
 function validateDataSource(ctx: ToolContext, widget: Partial<Widget>): void {
   const ds = widget.dataSource;
   if (!ds) return;
-  // buildArgv가 unknown command / 잘못된 파라미터를 즉시 던지게 해 AI 실수를 조기에 잡는다
-  ctx.commands.buildArgv(ds.commandId, ds.params);
+  // cli 소스만 명령 검증 — http/postgres는 각 소스가 실행 시 검증한다
+  if (ds.kind === 'cli') ctx.commands.buildArgv(ds.commandId, ds.params);
 }

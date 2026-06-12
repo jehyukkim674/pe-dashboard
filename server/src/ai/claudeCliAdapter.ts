@@ -1,6 +1,7 @@
 import type { DashboardStore } from '../dashboardStore.js';
 import type { CommandRegistry } from '../commands/registry.js';
 import type { PendingCommands } from '../commands/pending.js';
+import type { PgProfiles } from '../datasources/pgProfiles.js';
 import type { CommandResult, Dashboard } from '../types.js';
 import { runArgv } from '../commands/runner.js';
 import { ResultCache } from '../commands/resultCache.js';
@@ -33,6 +34,7 @@ interface Deps {
   commands: CommandRegistry;
   toolkit: ToolKit;
   pending?: PendingCommands; // 같은 응답에서 등록 요청한 명령에 의존하는 작업의 보류용
+  pgProfiles?: PgProfiles; // Postgres 위젯 생성 안내용 (프로필 이름만 노출)
   exec?: Exec; // 테스트 주입용. 기본 runArgv
   readOnly?: boolean; // 조회 전용 모드: AI의 변경 작업(operations)을 적용하지 않는다
   cache?: ResultCache; // 위젯 데이터 캐시. CliSource와 공유하면 화면 컨텍스트가 재실행을 피한다
@@ -168,6 +170,7 @@ export class ClaudeCliAdapter implements ChatAdapter {
           '- 그리드는 12컬럼, layout h 1칸 = 60px. 권장: stat w3 h2, table/chart w6 h5, log w6 h5, status w6 h4, text w4 h3.',
           '- display 옵션: stat={"metric":"count"|"path","path":"a.b.c","suffix":""}, table={"columns":[...]}, chart={"xKey":"","yKey":"","chartType":"line"|"bar"}, status={"labelPath":"a.b","statePath":"c.d","okValues":"Synced,Healthy"}, text={"content":""}.',
           '- dataSource.commandId는 아래 "사용 가능한 명령 템플릿"에 있는 것만 쓴다.',
+          '- DB 조회 위젯은 dataSource를 {"kind":"postgres","commandId":"","params":{},"profile":"프로필명","query":"SELECT ..."}로 쓴다 (SELECT/WITH 단일 문만). HTTP JSON은 {"kind":"http","commandId":"","params":{},"url":"https://..."}.',
           '- 같은 응답에서 방금 만든 대시보드에 위젯을 추가할 때 dashboardId에 "$last"를 쓴다.',
           '- 필요한 명령 템플릿이 없으면 register_command를 사용한다 (사용자 승인이 필요함을 reply에 언급).',
           '- 조회/질문만 있고 변경이 필요 없으면 operations를 빈 배열로 두고 reply로만 답한다.',
@@ -185,6 +188,9 @@ export class ClaudeCliAdapter implements ChatAdapter {
         : '',
       `현재 대시보드 상태: ${JSON.stringify(dashboardsForPrompt)}`,
       `사용 가능한 명령 템플릿: ${JSON.stringify(commands)}`,
+      this.deps.pgProfiles && this.deps.pgProfiles.names().length > 0
+        ? `사용 가능한 Postgres 프로필: ${JSON.stringify(this.deps.pgProfiles.names())}`
+        : '',
       screenText,
       historyText ? `이전 대화:\n${historyText}` : '',
       `사용자 요청: ${userMessage}`,
