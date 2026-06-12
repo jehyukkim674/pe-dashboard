@@ -84,12 +84,26 @@ export default function DashboardGrid({ dashboard, onChanged }: Props) {
       .catch((e) => void message.error(`위젯 수정 실패: ${(e as Error).message}`));
   };
 
+  // 12컬럼 그리드에서 기존 위젯과 겹치지 않는 가장 위쪽 빈 자리를 찾는다 (없으면 맨 아래)
+  const findFreePosition = (w: number, h: number): { x: number; y: number } => {
+    const occupied = dashboard.widgets.map((wg) => wg.layout);
+    const bottom = Math.max(0, ...occupied.map((l) => l.y + l.h));
+    for (let y = 0; y <= bottom; y++) {
+      for (let x = 0; x + w <= 12; x++) {
+        const collides = occupied.some(
+          (l) => x < l.x + l.w && l.x < x + w && y < l.y + l.h && l.y < y + h,
+        );
+        if (!collides) return { x, y };
+      }
+    }
+    return { x: 0, y: bottom };
+  };
+
   const addWidget = (draft: WidgetDraft) => {
     const size = DEFAULT_SIZE[draft.type];
-    const bottom = Math.max(0, ...dashboard.widgets.map((w) => w.layout.y + w.layout.h));
     const widget: Widget = {
       id: crypto.randomUUID(),
-      layout: { x: 0, y: bottom, ...size },
+      layout: { ...findFreePosition(size.w, size.h), ...size },
       ...draft,
     };
     api.saveDashboard({ ...dashboard, widgets: [...dashboard.widgets, widget] })

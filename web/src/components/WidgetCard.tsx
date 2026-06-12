@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Card, Popconfirm, Select, Spin, Tooltip } from 'antd';
+import { Alert, Card, Popconfirm, Select, Spin, Tooltip, message } from 'antd';
 import { DeleteOutlined, EditOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { Widget } from '../types';
 import { relativeTime, useNow, useWidgetData } from '../hooks/useWidgetData';
@@ -11,6 +11,17 @@ import LogWidget from './widgets/LogWidget';
 import TextWidget from './widgets/TextWidget';
 
 // 자동 갱신 주기 선택지. value 0 = 자동 갱신 없음(수동만)
+// 알림 권한 거부 안내는 세션당 1회만
+let notifiedPermissionDenied = false;
+function warnNotificationDenied(): void {
+  if (notifiedPermissionDenied) return;
+  notifiedPermissionDenied = true;
+  void message.warning(
+    '조건이 충족됐지만 macOS 알림 권한이 꺼져 있습니다. 시스템 설정 → 알림에서 PE Dashboard를 허용하세요.',
+    6,
+  );
+}
+
 const REFRESH_OPTIONS = [
   { value: 0, label: '수동' },
   { value: 10, label: '10초' },
@@ -30,6 +41,13 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit }
   const [editOpen, setEditOpen] = useState(false);
   const now = useNow();
 
+  // AI가 설정한 비표준 주기(예: 15초)도 select에 그대로 보이게 동적 옵션 추가
+  const refreshSec = widget.dataSource?.refreshSec ?? 0;
+  const refreshOptions = REFRESH_OPTIONS.some((o) => o.value === refreshSec)
+    ? REFRESH_OPTIONS
+    : [...REFRESH_OPTIONS, { value: refreshSec, label: `${refreshSec}초` }]
+        .sort((a, b) => a.value - b.value);
+
   // 조건 알림: 조건이 '불충족→충족'으로 바뀌는 순간에만 1회 발송 (폴링마다 반복 금지)
   const alertedRef = useRef(false);
   useEffect(() => {
@@ -40,7 +58,9 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit }
       : !!rule.pattern && (result.stdout + result.stderr).includes(rule.pattern);
     if (matched && !alertedRef.current) {
       if (Notification.permission === 'default') void Notification.requestPermission();
-      if (Notification.permission !== 'denied') {
+      if (Notification.permission === 'denied') {
+        warnNotificationDenied();
+      } else {
         new Notification(`PE Dashboard — ${widget.title}`, {
           body: rule.on === 'fail'
             ? (result.error ?? '명령이 실패했습니다')
@@ -75,8 +95,8 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit }
           {widget.dataSource && (
             <Select
               size="small" style={{ width: 72 }}
-              value={widget.dataSource.refreshSec ?? 0}
-              options={REFRESH_OPTIONS}
+              value={refreshSec}
+              options={refreshOptions}
               onChange={(sec) => onChangeRefresh(sec === 0 ? undefined : sec)}
               title="자동 갱신 주기"
             />
