@@ -179,6 +179,19 @@ describe('ClaudeCliAdapter', () => {
       expect(events[0]).toEqual({ type: 'text', text: '최근 커밋은 abc123 입니다' });
     });
 
+    it('identifies the current dashboard even when it has no widgets', async () => {
+      const { adapter, store, calls } = await makeAdapter([
+        envelope('{"reply":"네","operations":[]}'),
+      ]);
+      const dashboard = await store.create('빈 대시보드');
+      const { emit } = collect();
+      await adapter.chat('s1', '여기에 위젯 추가해줘', emit, { dashboardId: dashboard.id });
+
+      const prompt = calls[0][calls[0].indexOf('-p') + 1];
+      expect(prompt).toContain(`현재 보고 있는 대시보드: id="${dashboard.id}"`);
+      expect(prompt).toContain('현재 보고 있는 대시보드"에 적용');
+    });
+
     it('does not run widget commands when no dashboardId is given', async () => {
       const { adapter, calls } = await makeAdapter([
         envelope('{"reply":"네","operations":[]}'),

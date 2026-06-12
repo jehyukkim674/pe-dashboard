@@ -1,6 +1,6 @@
 import type { DashboardStore } from '../dashboardStore.js';
 import type { CommandRegistry } from '../commands/registry.js';
-import type { CommandResult } from '../types.js';
+import type { CommandResult, Dashboard } from '../types.js';
 import { runArgv } from '../commands/runner.js';
 import type { ToolKit } from './tools.js';
 import type { ChatAdapter, ChatContext, ChatEvent } from './adapter.js';
@@ -112,7 +112,11 @@ export class ClaudeCliAdapter implements ChatAdapter {
     const commands = this.deps.commands.list();
     const turns = this.history.get(sessionId) ?? [];
     const historyText = turns.map((t) => `사용자: ${t.user}\n어시스턴트: ${t.reply}`).join('\n');
-    const screenText = await this.screenContext(context);
+    // 잘못된 id(스토어가 throw)나 삭제된 대시보드는 화면 컨텍스트 없이 진행한다.
+    const current = context?.dashboardId
+      ? await this.deps.store.get(context.dashboardId).catch(() => undefined)
+      : undefined;
+    const screenText = current ? await this.screenContext(current) : '';
 
     const operationsFormat = this.deps.readOnly
       ? [
@@ -141,6 +145,7 @@ export class ClaudeCliAdapter implements ChatAdapter {
           '- 같은 응답에서 방금 만든 대시보드에 위젯을 추가할 때 dashboardId에 "$last"를 쓴다.',
           '- 필요한 명령 템플릿이 없으면 register_command를 사용한다 (사용자 승인이 필요함을 reply에 언급).',
           '- 조회/질문만 있고 변경이 필요 없으면 operations를 빈 배열로 두고 reply로만 답한다.',
+          '- 사용자가 대시보드를 명시하지 않은 위젯 추가·수정·삭제 요청은 "현재 보고 있는 대시보드"에 적용한다.',
         ];
 
     return [
@@ -149,6 +154,9 @@ export class ClaudeCliAdapter implements ChatAdapter {
       ...operationsFormat,
       screenText ? '- 데이터 관련 질문에는 아래 "현재 화면 위젯 데이터"를 근거로 답한다.' : '',
       '',
+      current
+        ? `사용자가 현재 보고 있는 대시보드: id="${current.id}", 이름="${current.name}"`
+        : '',
       `현재 대시보드 상태: ${JSON.stringify(dashboards)}`,
       `사용 가능한 명령 템플릿: ${JSON.stringify(commands)}`,
       screenText,
@@ -159,12 +167,7 @@ export class ClaudeCliAdapter implements ChatAdapter {
 
   // 사용자가 보고 있는 대시보드의 위젯 명령을 실제로 실행해 최신 데이터를 모은다.
   // 위젯이 띄우는 것과 같은 명령을 같은 파라미터로 실행하므로 화면과 같은 데이터가 된다.
-  private async screenContext(context?: ChatContext): Promise<string> {
-    if (!context?.dashboardId) return '';
-    // 잘못된 id(스토어가 throw)나 삭제된 대시보드는 컨텍스트 없이 진행한다.
-    const dashboard = await this.deps.store.get(context.dashboardId).catch(() => undefined);
-    if (!dashboard) return '';
-
+  private async screenContext(dashboard: Dashboard): Promise<string> {
     const cliWidgets = dashboard.widgets
       .filter((w) => w.dataSource?.kind === 'cli')
       .slice(0, MAX_CONTEXT_WIDGETS);
