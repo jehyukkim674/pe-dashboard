@@ -1,14 +1,29 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, type Rectangle } from 'electron';
 import path from 'node:path';
+import fs from 'node:fs';
 import { startServer } from '../../server/src/start.js';
 import { checkUpdateStatus, startInstall } from './updater.js';
 
 let win: BrowserWindow | null = null;
 
+// 마지막 창 크기·위치를 저장했다가 다음 실행 때 복원한다
+function boundsFile(): string {
+  return path.join(app.getPath('userData'), 'window-bounds.json');
+}
+
+function loadBounds(): Partial<Rectangle> {
+  try {
+    return JSON.parse(fs.readFileSync(boundsFile(), 'utf8')) as Partial<Rectangle>;
+  } catch {
+    return {};
+  }
+}
+
 async function createWindow(): Promise<void> {
   win = new BrowserWindow({
     width: 1600,
     height: 1000,
+    ...loadBounds(),
     minWidth: 720,
     minHeight: 480,
     webPreferences: {
@@ -16,6 +31,14 @@ async function createWindow(): Promise<void> {
       contextIsolation: true,
       nodeIntegration: false,
     },
+  });
+
+  win.on('close', () => {
+    try {
+      fs.writeFileSync(boundsFile(), JSON.stringify(win!.getBounds()));
+    } catch {
+      // 저장 실패는 무시 (다음 실행에 기본 크기 사용)
+    }
   });
 
   const devUrl = process.env.ELECTRON_START_URL;
