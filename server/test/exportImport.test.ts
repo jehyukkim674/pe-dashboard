@@ -25,6 +25,7 @@ describe('export/import routes', () => {
     const toolkit = buildTools({ store, commands, pending });
     app = await buildApp({
       store, commands, pending,
+      tools: toolkit,
       dataSources: new DataSourceRegistry(),
       chatService: new ClaudeCliAdapter({ store, commands, toolkit }),
     });

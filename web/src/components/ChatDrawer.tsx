@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Drawer, Input, Space, Tag, Typography, message as antdMessage } from 'antd';
+import { Alert, Button, Drawer, Input, Select, Space, Tag, Typography, message as antdMessage } from 'antd';
 import { CheckOutlined, CloseOutlined, SendOutlined, ToolOutlined } from '@ant-design/icons';
 import { api, streamChat } from '../api';
 import type { ChatEvent, CommandTemplate } from '../types';
@@ -20,11 +20,25 @@ type Item =
 
 const SESSION_ID = `s-${Date.now()}`;
 
+// claude CLI --model 별칭. '' = CLI 기본 모델
+const MODEL_OPTIONS = [
+  { value: '', label: '기본 모델' },
+  { value: 'haiku', label: 'haiku (빠름)' },
+  { value: 'sonnet', label: 'sonnet' },
+  { value: 'opus', label: 'opus (정밀)' },
+];
+
 export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboardId }: Props) {
   const [items, setItems] = useState<Item[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState<string>(); // 진행 단계 ('화면 데이터 수집 중…' 등)
+  const [model, setModel] = useState(() => localStorage.getItem('pe-chat-model') ?? '');
+
+  const changeModel = (value: string) => {
+    setModel(value);
+    localStorage.setItem('pe-chat-model', value);
+  };
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -60,7 +74,7 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
           push({ kind: 'confirm', pendingId: e.pendingId, command: e.command, warning: e.warning });
         }
         if (e.type === 'error') push({ kind: 'error', text: e.message });
-      }, { signal: ac.signal, dashboardId });
+      }, { signal: ac.signal, dashboardId, model });
     } catch (e) {
       if ((e as Error).name !== 'AbortError') {
         push({ kind: 'error', text: (e as Error).message });
@@ -73,8 +87,17 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
 
   const resolveConfirm = async (pendingId: string, accept: boolean) => {
     try {
-      if (accept) await api.confirmCommand(pendingId);
-      else await api.rejectCommand(pendingId);
+      let appliedNote = '';
+      if (accept) {
+        const result = await api.confirmCommand(pendingId);
+        if (result.applied > 0) {
+          appliedNote = ` — 보류됐던 위젯 작업 ${result.applied}개 적용됨`;
+          onDashboardsChanged();
+        }
+        for (const err of result.errors) void antdMessage.error(err);
+      } else {
+        await api.rejectCommand(pendingId);
+      }
       setItems((prev) =>
         prev.map((it) =>
           it.kind === 'confirm' && it.pendingId === pendingId
@@ -82,14 +105,22 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
             : it,
         ),
       );
-      void antdMessage.success(accept ? '명령이 등록되었습니다' : '등록을 거절했습니다');
+      void antdMessage.success(accept ? `명령이 등록되었습니다${appliedNote}` : '등록을 거절했습니다');
     } catch (e) {
       void antdMessage.error((e as Error).message);
     }
   };
 
   return (
-    <Drawer title="AI 채팅" placement="right" size={420} open={open} onClose={onClose}>
+    <Drawer
+      title="AI 채팅" placement="right" size={420} open={open} onClose={onClose}
+      extra={
+        <Select
+          size="small" style={{ width: 130 }} value={model}
+          options={MODEL_OPTIONS} onChange={changeModel} title="응답 모델"
+        />
+      }
+    >
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <div style={{ flex: 1, overflow: 'auto', paddingBottom: 12 }}>
           {items.length === 0 && (

@@ -42,7 +42,7 @@ export const api = {
 
   confirmCommand: (pendingId: string) =>
     fetch(`/api/commands/pending/${pendingId}/confirm`, { method: 'POST' }).then((r) =>
-      json<{ registered: string }>(r),
+      json<{ registered: string; applied: number; errors: string[] }>(r),
     ),
   rejectCommand: (pendingId: string) =>
     fetch(`/api/commands/pending/${pendingId}/reject`, { method: 'POST' }).then((r) =>
@@ -57,12 +57,14 @@ export async function streamChat(
   sessionId: string,
   message: string,
   onEvent: (e: ChatEvent) => void,
-  opts: { signal?: AbortSignal; dashboardId?: string } = {},
+  opts: { signal?: AbortSignal; dashboardId?: string; model?: string } = {},
 ): Promise<void> {
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId, message, dashboardId: opts.dashboardId }),
+    body: JSON.stringify({
+      sessionId, message, dashboardId: opts.dashboardId, model: opts.model || undefined,
+    }),
     signal: opts.signal,
   });
   if (!res.ok) throw new Error(`chat failed: ${res.status}`);

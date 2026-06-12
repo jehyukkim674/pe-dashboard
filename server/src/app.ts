@@ -5,6 +5,7 @@ import type { CommandRegistry } from './commands/registry.js';
 import type { PendingCommands } from './commands/pending.js';
 import type { DataSourceRegistry } from './datasources/registry.js';
 import type { ChatAdapter } from './ai/adapter.js';
+import type { ToolKit } from './ai/tools.js';
 import { dashboardRoutes } from './routes/dashboards.js';
 import { commandRoutes } from './routes/commands.js';
 import { widgetDataRoutes } from './routes/widgetData.js';
@@ -17,13 +18,14 @@ export interface AppDeps {
   pending: PendingCommands;
   dataSources: DataSourceRegistry;
   chatService: ChatAdapter;
+  tools: ToolKit;
 }
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const app = Fastify();
   await app.register(cors, { origin: true }); // 로컬 전용
   dashboardRoutes(app, deps.store);
-  commandRoutes(app, deps.commands, deps.pending);
+  commandRoutes(app, deps.commands, deps.pending, deps.tools);
   widgetDataRoutes(app, deps.dataSources);
   chatRoutes(app, deps.chatService);
   exportImportRoutes(app, deps.store, deps.commands);

@@ -26,15 +26,17 @@ async function makeAdapter(results: CommandResult[], opts: { readOnly?: boolean 
   await store.init();
   const commands = new CommandRegistry(path.join(dir, 'commands.json'));
   await commands.load();
-  const toolkit = buildTools({ store, commands, pending: new PendingCommands() }, opts);
+  const pending = new PendingCommands();
+  const toolkit = buildTools({ store, commands, pending }, opts);
   const calls: string[][] = [];
   const exec = async (argv: string[]) => {
     calls.push(argv);
     return results.shift() ?? cliResult({});
   };
   return {
-    adapter: new ClaudeCliAdapter({ store, commands, toolkit, exec, readOnly: opts.readOnly }),
+    adapter: new ClaudeCliAdapter({ store, commands, pending, toolkit, exec, readOnly: opts.readOnly }),
     store,
+    pending,
     calls,
   };
 }
@@ -228,6 +230,64 @@ describe('ClaudeCliAdapter', () => {
       expect(calls).toHaveLength(1);
       expect(calls[0][0]).toBe('claude');
     });
+  });
+
+  it('defers widget ops that depend on a just-requested command until approval', async () => {
+    const ops = JSON.stringify({
+      reply: '등록 요청했어요',
+      operations: [
+        { op: 'register_command', id: 'top_summary', description: 'top', argv: ['top', '-l', '1'], params: [] },
+        {
+          op: 'add_widget', dashboardId: 'd1',
+          widget: {
+            type: 'log', title: 'CPU', layout: { x: 0, y: 0, w: 6, h: 5 },
+            dataSource: { kind: 'cli', commandId: 'top_summary', params: {} },
+          },
+        },
+      ],
+    });
+    const { adapter, store, pending } = await makeAdapter([envelope(ops)]);
+    await store.save({ id: 'd1', name: '보드', widgets: [] });
+    const { events, emit } = collect();
+    await adapter.chat('s1', 'top 위젯 추가해줘', emit);
+
+    const confirm = events.find((e) => e.type === 'confirm_request');
+    expect(confirm).toBeDefined();
+    expect((await store.get('d1'))!.widgets).toHaveLength(0); // 즉시 추가 안 됨
+    const entry = pending.take((confirm as { pendingId: string }).pendingId);
+    expect(entry?.deferred).toHaveLength(1); // 승인 시 적용될 작업으로 보류됨
+    expect(events.some((e) => e.type === 'tool' && /자동 적용/.test(e.summary))).toBe(true);
+  });
+
+  it('passes whitelisted --model and ignores unknown values', async () => {
+    const { adapter, calls } = await makeAdapter([
+      envelope('{"reply":"a","operations":[]}'),
+      envelope('{"reply":"b","operations":[]}'),
+    ]);
+    const { emit } = collect();
+    await adapter.chat('s1', '안녕', emit, { model: 'haiku' });
+    expect(calls[0].join(' ')).toContain('--model haiku');
+    await adapter.chat('s1', '안녕', emit, { model: 'evil; rm' });
+    expect(calls[1].join(' ')).not.toContain('--model');
+  });
+
+  it('summarizes non-current dashboards in the prompt (prompt diet)', async () => {
+    const { adapter, store, calls } = await makeAdapter([envelope('{"reply":"네","operations":[]}')]);
+    const current = await store.create('현재보드');
+    const currentWidget = await store.addWidget(current.id, {
+      type: 'log', title: '현재위젯', layout: { x: 0, y: 0, w: 6, h: 5 },
+    });
+    const other = await store.create('다른보드');
+    await store.addWidget(other.id, {
+      type: 'log', title: '다른위젯', layout: { x: 0, y: 0, w: 6, h: 5 },
+    });
+    const { emit } = collect();
+    await adapter.chat('s1', '안녕', emit, { dashboardId: current.id });
+
+    const prompt = calls[0][calls[0].indexOf('-p') + 1];
+    expect(prompt).toContain(currentWidget.id); // 현재 대시보드는 위젯 id까지 전체
+    expect(prompt).toContain('widgetTitles'); // 나머지는 제목 요약만
+    expect(prompt).toContain('다른위젯');
   });
 
   it('includes recent history in the next prompt', async () => {

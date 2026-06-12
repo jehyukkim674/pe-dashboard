@@ -52,9 +52,9 @@ export async function startServer(
   const chatService: ChatAdapter =
     process.env.CHAT_ADAPTER === 'api'
       ? new ChatService({ client: new Anthropic(), tools, store, commands })
-      : new ClaudeCliAdapter({ store, commands, toolkit: tools, readOnly: aiReadOnly, cache: commandCache });
+      : new ClaudeCliAdapter({ store, commands, pending, toolkit: tools, readOnly: aiReadOnly, cache: commandCache });
 
-  const app = await buildApp({ store, commands, pending, dataSources, chatService });
+  const app = await buildApp({ store, commands, pending, dataSources, chatService, tools });
 
   if (opts.staticDir) {
     await fs.access(path.join(opts.staticDir, 'index.html')).catch(() => {

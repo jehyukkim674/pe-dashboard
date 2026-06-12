@@ -3,10 +3,11 @@ import type { ChatAdapter, ChatEvent } from '../ai/adapter.js';
 
 export function chatRoutes(app: FastifyInstance, chatService: ChatAdapter): void {
   app.post('/api/chat', async (req, reply) => {
-    const { sessionId, message, dashboardId } = req.body as {
+    const { sessionId, message, dashboardId, model } = req.body as {
       sessionId?: string;
       message?: string;
       dashboardId?: string;
+      model?: string;
     };
     if (!sessionId || !message) {
       return reply.code(400).send({ error: 'sessionId and message are required' });
@@ -24,7 +25,7 @@ export function chatRoutes(app: FastifyInstance, chatService: ChatAdapter): void
     reply.raw.on('close', () => abort.abort());
 
     try {
-      await chatService.chat(sessionId, message, emit, { dashboardId, signal: abort.signal });
+      await chatService.chat(sessionId, message, emit, { dashboardId, model, signal: abort.signal });
     } catch (e) {
       emit({ type: 'error', message: (e as Error).message } as ChatEvent);
     } finally {

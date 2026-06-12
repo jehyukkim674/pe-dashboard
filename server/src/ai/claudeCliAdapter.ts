@@ -1,5 +1,6 @@
 import type { DashboardStore } from '../dashboardStore.js';
 import type { CommandRegistry } from '../commands/registry.js';
+import type { PendingCommands } from '../commands/pending.js';
 import type { CommandResult, Dashboard } from '../types.js';
 import { runArgv } from '../commands/runner.js';
 import { ResultCache } from '../commands/resultCache.js';
@@ -22,12 +23,16 @@ const READONLY_CLI_FLAGS = [
   '--disallowedTools', 'Bash,Write,Edit,NotebookEdit,WebFetch,WebSearch',
 ];
 
+// --model로 전달 가능한 별칭 화이트리스트 (argv 주입 방지)
+const ALLOWED_MODELS = new Set(['haiku', 'sonnet', 'opus']);
+
 type Exec = (argv: string[], timeoutMs?: number, signal?: AbortSignal) => Promise<CommandResult>;
 
 interface Deps {
   store: DashboardStore;
   commands: CommandRegistry;
   toolkit: ToolKit;
+  pending?: PendingCommands; // 같은 응답에서 등록 요청한 명령에 의존하는 작업의 보류용
   exec?: Exec; // 테스트 주입용. 기본 runArgv
   readOnly?: boolean; // 조회 전용 모드: AI의 변경 작업(operations)을 적용하지 않는다
   cache?: ResultCache; // 위젯 데이터 캐시. CliSource와 공유하면 화면 컨텍스트가 재실행을 피한다
@@ -60,8 +65,10 @@ export class ClaudeCliAdapter implements ChatAdapter {
     const prompt = await this.buildPrompt(sessionId, userMessage, context);
 
     emit({ type: 'status', stage: 'AI 응답 생성 중…' });
+    const modelFlags =
+      context?.model && ALLOWED_MODELS.has(context.model) ? ['--model', context.model] : [];
     const result = await this.exec(
-      ['claude', '-p', prompt, '--output-format', 'json', ...READONLY_CLI_FLAGS],
+      ['claude', '-p', prompt, '--output-format', 'json', ...READONLY_CLI_FLAGS, ...modelFlags],
       CLI_TIMEOUT_MS,
       context?.signal, // 클라이언트가 끊으면 claude 프로세스도 종료
     );
@@ -94,7 +101,7 @@ export class ClaudeCliAdapter implements ChatAdapter {
     if (this.deps.readOnly && operations.length > 0) {
       emit({ type: 'error', message: '조회 전용 모드라 변경 작업은 적용하지 않았습니다.' });
     } else {
-      await applyOperations(operations, this.deps.toolkit, emit);
+      await applyOperations(operations, this.deps.toolkit, emit, this.deps.pending);
     }
     this.remember(sessionId, userMessage, parsed.reply ?? '');
   }
@@ -126,6 +133,16 @@ export class ClaudeCliAdapter implements ChatAdapter {
       ? await this.deps.store.get(context.dashboardId).catch(() => undefined)
       : undefined;
     const screenText = current ? await this.screenContext(current) : '';
+
+    // 프롬프트 다이어트: 현재 보고 있는 대시보드만 전체 구조(위젯 id·layout 포함)를 주고,
+    // 나머지는 id·이름·위젯 제목만 요약한다. 대시보드가 늘어도 프롬프트가 비대해지지 않는다.
+    const dashboardsForPrompt = current
+      ? dashboards.map((d) =>
+          d.id === current.id
+            ? d
+            : { id: d.id, name: d.name, widgetTitles: d.widgets.map((w) => w.title) },
+        )
+      : dashboards;
 
     const operationsFormat = this.deps.readOnly
       ? [
@@ -166,7 +183,7 @@ export class ClaudeCliAdapter implements ChatAdapter {
       current
         ? `사용자가 현재 보고 있는 대시보드: id="${current.id}", 이름="${current.name}"`
         : '',
-      `현재 대시보드 상태: ${JSON.stringify(dashboards)}`,
+      `현재 대시보드 상태: ${JSON.stringify(dashboardsForPrompt)}`,
       `사용 가능한 명령 템플릿: ${JSON.stringify(commands)}`,
       screenText,
       historyText ? `이전 대화:\n${historyText}` : '',

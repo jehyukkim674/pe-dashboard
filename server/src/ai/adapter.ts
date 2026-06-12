@@ -10,6 +10,7 @@ export type ChatEvent =
 // 사용자가 현재 보고 있는 화면 정보. AI가 화면의 위젯 데이터를 근거로 답하게 한다.
 export interface ChatContext {
   dashboardId?: string;
+  model?: string; // claude CLI --model (haiku|sonnet|opus). 미지정 시 CLI 기본값
   signal?: AbortSignal; // 클라이언트가 끊으면 진행 중인 claude 실행을 중단한다
 }
 
