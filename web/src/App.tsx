@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Button, Empty, Input, Layout, Menu, message, Modal, Typography, FloatButton } from 'antd';
-import { CommentOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
+import { Button, Empty, Input, Layout, Menu, message, Modal, Popconfirm, Typography, FloatButton } from 'antd';
+import { CommentOutlined, DeleteOutlined, EditOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
 import { api } from './api';
 import type { Dashboard } from './types';
 import DashboardGrid from './components/DashboardGrid';
@@ -13,6 +13,7 @@ export default function App() {
   const [chatOpen, setChatOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [renaming, setRenaming] = useState<{ id: string; name: string }>();
   const [submitting, setSubmitting] = useState(false);
   const [updateCheckCount, setUpdateCheckCount] = useState(0);
 
@@ -47,6 +48,30 @@ export default function App() {
     }
   };
 
+  const renameDashboard = async () => {
+    if (!renaming?.name.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      const target = dashboards.find((d) => d.id === renaming.id);
+      if (target) await api.saveDashboard({ ...target, name: renaming.name.trim() });
+      setRenaming(undefined);
+      await refresh(renaming.id);
+    } catch (e) {
+      void message.error(`이름 변경 실패: ${(e as Error).message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const deleteDashboard = async (id: string) => {
+    try {
+      await api.deleteDashboard(id);
+      await refresh();
+    } catch (e) {
+      void message.error(`대시보드 삭제 실패: ${(e as Error).message}`);
+    }
+  };
+
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <Layout.Sider theme="light" width={220}>
@@ -56,7 +81,33 @@ export default function App() {
         <Menu
           mode="inline"
           selectedKeys={selectedId ? [selectedId] : []}
-          items={dashboards.map((d) => ({ key: d.id, label: d.name }))}
+          items={dashboards.map((d) => ({
+            key: d.id,
+            label: (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.name}</span>
+                {/* 액션 클릭이 메뉴 선택으로 번지지 않게 막는다 */}
+                <span
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ flexShrink: 0, marginLeft: 8, opacity: 0.55 }}
+                >
+                  <EditOutlined
+                    title="이름 변경"
+                    onClick={() => setRenaming({ id: d.id, name: d.name })}
+                    style={{ marginRight: 8 }}
+                  />
+                  <Popconfirm
+                    title={`'${d.name}' 대시보드를 삭제할까요?`}
+                    description="위젯도 함께 삭제됩니다."
+                    onConfirm={() => void deleteDashboard(d.id)}
+                    okText="삭제" cancelText="취소"
+                  >
+                    <DeleteOutlined title="삭제" />
+                  </Popconfirm>
+                </span>
+              </div>
+            ),
+          }))}
           onClick={(e) => setSelectedId(e.key)}
         />
         <Button
@@ -101,6 +152,18 @@ export default function App() {
         <Input
           placeholder="이름 (예: 배포 현황)" value={newName} autoFocus
           onChange={(e) => setNewName(e.target.value)} onPressEnter={createDashboard}
+        />
+      </Modal>
+
+      <Modal
+        title="대시보드 이름 변경" open={!!renaming} onOk={renameDashboard}
+        onCancel={() => setRenaming(undefined)} okText="변경" cancelText="취소"
+        confirmLoading={submitting}
+      >
+        <Input
+          value={renaming?.name ?? ''} autoFocus
+          onChange={(e) => setRenaming((prev) => prev && { ...prev, name: e.target.value })}
+          onPressEnter={renameDashboard}
         />
       </Modal>
     </Layout>
