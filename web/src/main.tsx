@@ -6,6 +6,7 @@ import App from './App';
 import 'antd/dist/reset.css';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
+import './styles.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

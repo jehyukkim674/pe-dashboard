@@ -1,8 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Drawer, Input, Select, Space, Tag, Tooltip, Typography, message as antdMessage } from 'antd';
 import { CheckOutlined, ClearOutlined, CloseOutlined, SendOutlined, ToolOutlined } from '@ant-design/icons';
+import { marked } from 'marked';
 import { api, streamChat } from '../api';
+import { sanitizeHtml } from '../utils/sanitize';
 import type { ChatEvent, CommandTemplate } from '../types';
+
+// AI 응답을 마크다운(목록·코드·강조)으로 렌더링한다. 로컬 AI 응답이지만 방어적으로 정화.
+function renderMarkdown(text: string): string {
+  return sanitizeHtml(marked.parse(text, { async: false, breaks: true }));
+}
 
 interface Props {
   open: boolean;
@@ -165,15 +172,18 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
             switch (item.kind) {
               case 'user':
                 return (
-                  <p key={i} style={{ textAlign: 'right' }}>
-                    <Tag color="blue" style={{ whiteSpace: 'pre-wrap' }}>{item.text}</Tag>
-                  </p>
+                  <div key={i} style={{ textAlign: 'right' }}>
+                    <span className="chat-bubble chat-user">{item.text}</span>
+                  </div>
                 );
               case 'assistant':
                 return (
-                  <Typography.Paragraph key={i} style={{ whiteSpace: 'pre-wrap' }}>
-                    {item.text}
-                  </Typography.Paragraph>
+                  <div key={i}>
+                    <span
+                      className="chat-bubble chat-assistant"
+                      dangerouslySetInnerHTML={{ __html: renderMarkdown(item.text) }}
+                    />
+                  </div>
                 );
               case 'tool':
                 return (

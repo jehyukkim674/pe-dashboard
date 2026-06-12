@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Button, ConfigProvider, Empty, Input, Layout, Menu, message, Modal, Popconfirm, Typography, FloatButton, theme as antdTheme } from 'antd';
+import { Button, ConfigProvider, Empty, Input, Layout, Menu, message, Modal, Popconfirm, Space, Tooltip, Typography, FloatButton, theme as antdTheme } from 'antd';
 import {
   BulbOutlined, CommentOutlined, CopyOutlined, DeleteOutlined, DownloadOutlined, EditOutlined,
   FullscreenOutlined, FullscreenExitOutlined, HistoryOutlined, PlusOutlined, SyncOutlined,
@@ -155,10 +155,12 @@ export default function App() {
     <Layout style={{ minHeight: '100vh' }}>
       {!tvMode && (
       <Layout.Sider theme="light" width={220}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <Typography.Title level={4} style={{ padding: '16px 16px 0' }}>
           PE Dashboard
         </Typography.Title>
         <Menu
+          style={{ flex: 1, overflow: 'auto', borderInlineEnd: 'none' }}
           mode="inline"
           selectedKeys={selectedId ? [selectedId] : []}
           items={dashboards.map((d) => ({
@@ -197,53 +199,38 @@ export default function App() {
         />
         <Button
           type="dashed" icon={<PlusOutlined />} block
-          style={{ width: 'calc(100% - 32px)', margin: 16 }}
+          style={{ width: 'calc(100% - 32px)', margin: '8px 16px' }}
           onClick={() => setCreating(true)}
         >
           새 대시보드
         </Button>
-        <Button
-          type="text" icon={<SyncOutlined />} block
-          style={{ width: 'calc(100% - 32px)', margin: '0 16px' }}
-          onClick={() => setUpdateCheckCount((c) => c + 1)}
+        {/* 보조 기능은 하단 아이콘 바로 압축 — 대시보드 목록이 주인공 */}
+        <div
+          style={{
+            display: 'flex', justifyContent: 'space-around', padding: '6px 8px 10px',
+            borderTop: '1px solid rgba(128,128,128,0.15)',
+          }}
         >
-          업데이트 확인
-        </Button>
-        <Button
-          type="text" icon={<BulbOutlined />} block
-          style={{ width: 'calc(100% - 32px)', margin: '8px 16px 0' }}
-          onClick={toggleDark}
-        >
-          {dark ? '라이트 모드' : '다크 모드'}
-        </Button>
-        <Button
-          type="text" icon={<FullscreenOutlined />} block
-          style={{ width: 'calc(100% - 32px)', margin: '8px 16px 0' }}
-          onClick={() => setTvMode(true)}
-        >
-          TV 모드
-        </Button>
-        <Button
-          type="text" icon={<DownloadOutlined />} block
-          style={{ width: 'calc(100% - 32px)', margin: '8px 16px 0' }}
-          onClick={() => void exportData()}
-        >
-          내보내기
-        </Button>
-        <Button
-          type="text" icon={<UploadOutlined />} block
-          style={{ width: 'calc(100% - 32px)', margin: '8px 16px 0' }}
-          onClick={importData}
-        >
-          가져오기
-        </Button>
-        <Button
-          type="text" icon={<HistoryOutlined />} block
-          style={{ width: 'calc(100% - 32px)', margin: '8px 16px 0' }}
-          onClick={() => setLogOpen(true)}
-        >
-          실행 기록
-        </Button>
+          <Tooltip title="업데이트 확인">
+            <Button type="text" size="small" icon={<SyncOutlined />} onClick={() => setUpdateCheckCount((c) => c + 1)} />
+          </Tooltip>
+          <Tooltip title={dark ? '라이트 모드' : '다크 모드'}>
+            <Button type="text" size="small" icon={<BulbOutlined />} onClick={toggleDark} />
+          </Tooltip>
+          <Tooltip title="TV 모드">
+            <Button type="text" size="small" icon={<FullscreenOutlined />} onClick={() => setTvMode(true)} />
+          </Tooltip>
+          <Tooltip title="내보내기">
+            <Button type="text" size="small" icon={<DownloadOutlined />} onClick={() => void exportData()} />
+          </Tooltip>
+          <Tooltip title="가져오기">
+            <Button type="text" size="small" icon={<UploadOutlined />} onClick={importData} />
+          </Tooltip>
+          <Tooltip title="실행 기록">
+            <Button type="text" size="small" icon={<HistoryOutlined />} onClick={() => setLogOpen(true)} />
+          </Tooltip>
+        </div>
+      </div>
       </Layout.Sider>
       )}
 
@@ -251,7 +238,17 @@ export default function App() {
         {selected ? (
           <DashboardGrid dashboard={selected} onChanged={() => refresh()} />
         ) : (
-          <Empty description="대시보드가 없습니다. 채팅으로 '배포 대시보드 만들어줘'라고 말해보세요." />
+          <Empty
+            description="대시보드가 없습니다"
+            style={{ marginTop: 120 }}
+          >
+            <Space>
+              <Button icon={<PlusOutlined />} onClick={() => setCreating(true)}>새 대시보드</Button>
+              <Button type="primary" icon={<CommentOutlined />} onClick={() => setChatOpen(true)}>
+                AI에게 만들어달라기
+              </Button>
+            </Space>
+          </Empty>
         )}
       </Layout.Content>
 

@@ -1,16 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Button, Modal, Progress, Typography, message } from 'antd';
 import type { UpdateCheckPayload } from '../electron';
+import { sanitizeHtml } from '../utils/sanitize';
 
 interface Props {
   manualCheckCount: number; // App의 '업데이트 확인' 버튼 클릭마다 증가
 }
 
 export function sanitizeNotes(html: string): string {
-  return html
-    .replace(/<\s*(script|style|iframe)[^>]*>[\s\S]*?<\/\s*\1\s*>/gi, '')
-    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replace(/javascript:/gi, '');
+  return sanitizeHtml(html);
 }
 
 export default function UpdateModal({ manualCheckCount }: Props) {

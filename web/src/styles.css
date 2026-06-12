@@ -1,0 +1,49 @@
+/* 위젯 카드 액션: 평소엔 숨기고 카드에 마우스를 올렸을 때만 표시 (헤더 과밀 해소) */
+.widget-actions .hover-actions {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.ant-card:hover .hover-actions,
+.widget-actions .hover-actions:focus-within {
+  opacity: 1;
+}
+
+/* 카드 헤더가 드래그 핸들임을 커서로 표시 */
+.react-grid-item .ant-card-head {
+  cursor: move;
+  user-select: none;
+}
+
+/* 채팅 말풍선 */
+.chat-bubble {
+  display: inline-block;
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  margin: 4px 0;
+  text-align: left;
+  word-break: break-word;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.chat-user {
+  background: #1677ff;
+  color: #fff;
+  border-bottom-right-radius: 4px;
+  white-space: pre-wrap;
+}
+.chat-assistant {
+  background: rgba(128, 128, 128, 0.12);
+  border-bottom-left-radius: 4px;
+}
+.chat-assistant > *:first-child { margin-top: 0; }
+.chat-assistant > *:last-child { margin-bottom: 0; }
+.chat-assistant pre {
+  background: rgba(0, 0, 0, 0.08);
+  padding: 8px 10px;
+  border-radius: 6px;
+  overflow: auto;
+  font-size: 12px;
+}
+.chat-assistant code { font-size: 12px; }
+.chat-assistant ul, .chat-assistant ol { padding-left: 20px; margin: 4px 0; }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Card, Popconfirm, Select, Spin, Tooltip, message } from 'antd';
+import { Alert, Card, Popconfirm, Select, Skeleton, Spin, Tooltip, message } from 'antd';
 import { CopyOutlined, DeleteOutlined, EditOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { Widget } from '../types';
 import { relativeTime, useNow, useWidgetData } from '../hooks/useWidgetData';
@@ -75,6 +75,7 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, 
 
   const body = (() => {
     if (widget.type === 'text') return <TextWidget display={widget.display} />;
+    if (loading && !result) return <Skeleton active title={false} paragraph={{ rows: 3 }} />;
     if (result?.error) {
       return <Alert type="warning" showIcon message={result.error} style={{ fontSize: 12 }} />;
     }
@@ -89,21 +90,40 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, 
 
   return (
     <Card
-      size="small" title={widget.title}
+      size="small"
+      title={widget.alert ? `🔔 ${widget.title}` : widget.title}
       style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
       styles={{ body: { flex: 1, overflow: 'hidden' } }}
       extra={
         // widget-actions: 그리드 드래그(draggableCancel)에서 제외해 클릭이 동작하게 한다
         <span className="widget-actions" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-          {widget.dataSource && (
-            <Select
-              size="small" style={{ width: 72 }}
-              value={refreshSec}
-              options={refreshOptions}
-              onChange={(sec) => onChangeRefresh(sec === 0 ? undefined : sec)}
-              title="자동 갱신 주기"
-            />
-          )}
+          {/* 평소엔 갱신 시각만 보이고 나머지 액션은 카드에 마우스를 올렸을 때 표시 */}
+          <span className="hover-actions" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            {widget.dataSource && (
+              <Select
+                size="small" style={{ width: 72 }}
+                value={refreshSec}
+                options={refreshOptions}
+                onChange={(sec) => onChangeRefresh(sec === 0 ? undefined : sec)}
+                title="자동 갱신 주기"
+              />
+            )}
+            {!loading && widget.dataSource && (
+              <Tooltip title="지금 새로고침">
+                <ReloadOutlined onClick={reload} style={{ cursor: 'pointer' }} />
+              </Tooltip>
+            )}
+            <Tooltip title="위젯 편집">
+              <EditOutlined onClick={() => setEditOpen(true)} style={{ cursor: 'pointer' }} />
+            </Tooltip>
+            <Tooltip title="복제">
+              <CopyOutlined onClick={onDuplicate} style={{ cursor: 'pointer' }} />
+            </Tooltip>
+            <Popconfirm title="위젯을 삭제할까요?" onConfirm={onRemove} okText="삭제" cancelText="취소">
+              <DeleteOutlined style={{ cursor: 'pointer' }} />
+            </Popconfirm>
+          </span>
+          {loading && <Spin size="small" />}
           {widget.dataSource && updatedAt && (
             <Tooltip title="마지막 갱신 시각">
               <span style={{ fontSize: 11, color: 'rgba(128,128,128,0.85)', fontVariantNumeric: 'tabular-nums' }}>
@@ -111,21 +131,6 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, 
               </span>
             </Tooltip>
           )}
-          {loading && <Spin size="small" />}
-          {!loading && widget.dataSource && (
-            <Tooltip title="지금 새로고침">
-              <ReloadOutlined onClick={reload} style={{ cursor: 'pointer' }} />
-            </Tooltip>
-          )}
-          <Tooltip title="위젯 편집">
-            <EditOutlined onClick={() => setEditOpen(true)} style={{ cursor: 'pointer' }} />
-          </Tooltip>
-          <Tooltip title="복제">
-            <CopyOutlined onClick={onDuplicate} style={{ cursor: 'pointer' }} />
-          </Tooltip>
-          <Popconfirm title="위젯을 삭제할까요?" onConfirm={onRemove} okText="삭제" cancelText="취소">
-            <DeleteOutlined style={{ cursor: 'pointer' }} />
-          </Popconfirm>
         </span>
       }
     >
