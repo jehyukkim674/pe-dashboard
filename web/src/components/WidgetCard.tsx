@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Card, Popconfirm, Select, Spin, Tooltip, message } from 'antd';
-import { DeleteOutlined, EditOutlined, ReloadOutlined } from '@ant-design/icons';
+import { CopyOutlined, DeleteOutlined, EditOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { Widget } from '../types';
 import { relativeTime, useNow, useWidgetData } from '../hooks/useWidgetData';
 import WidgetEditModal, { type WidgetDraft } from './WidgetEditModal';
@@ -31,11 +31,12 @@ const REFRESH_OPTIONS = [
   { value: 300, label: '5분' },
 ];
 
-export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit }: {
+export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, onDuplicate }: {
   widget: Widget;
   onRemove: () => void;
   onChangeRefresh: (refreshSec?: number) => void;
   onEdit: (draft: WidgetDraft) => void;
+  onDuplicate: () => void;
 }) {
   const { result, loading, reload, updatedAt } = useWidgetData(widget.dataSource);
   const [editOpen, setEditOpen] = useState(false);
@@ -116,6 +117,9 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit }
           )}
           <Tooltip title="위젯 편집">
             <EditOutlined onClick={() => setEditOpen(true)} style={{ cursor: 'pointer' }} />
+          </Tooltip>
+          <Tooltip title="복제">
+            <CopyOutlined onClick={onDuplicate} style={{ cursor: 'pointer' }} />
           </Tooltip>
           <Popconfirm title="위젯을 삭제할까요?" onConfirm={onRemove} okText="삭제" cancelText="취소">
             <DeleteOutlined style={{ cursor: 'pointer' }} />

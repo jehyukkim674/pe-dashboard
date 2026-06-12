@@ -99,6 +99,20 @@ export default function DashboardGrid({ dashboard, onChanged }: Props) {
     return { x: 0, y: bottom };
   };
 
+  const duplicateWidget = (widgetId: string) => {
+    const source = dashboard.widgets.find((w) => w.id === widgetId);
+    if (!source) return;
+    const copy: Widget = {
+      ...source,
+      id: crypto.randomUUID(),
+      title: `${source.title} (복사)`,
+      layout: { ...findFreePosition(source.layout.w, source.layout.h), w: source.layout.w, h: source.layout.h },
+    };
+    api.saveDashboard({ ...dashboard, widgets: [...dashboard.widgets, copy] })
+      .then(() => onChanged())
+      .catch((e) => void message.error(`위젯 복제 실패: ${(e as Error).message}`));
+  };
+
   const addWidget = (draft: WidgetDraft) => {
     const size = DEFAULT_SIZE[draft.type];
     const widget: Widget = {
@@ -130,6 +144,7 @@ export default function DashboardGrid({ dashboard, onChanged }: Props) {
               onRemove={() => removeWidget(widget.id)}
               onChangeRefresh={(sec) => changeRefresh(widget.id, sec)}
               onEdit={(draft) => editWidget(widget.id, draft)}
+              onDuplicate={() => duplicateWidget(widget.id)}
             />
           </div>
         ))}
