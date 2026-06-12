@@ -89,8 +89,12 @@ export class ChatService implements ChatAdapter {
       const output = await handler(input);
       emit({ type: 'tool', name, summary: describeToolCall(name, input) });
       if (name === 'register_command') {
-        const { pendingId, command } = output as { pendingId: string; command: CommandTemplate };
-        emit({ type: 'confirm_request', pendingId, command });
+        const { pendingId, command, warning } = output as {
+          pendingId: string;
+          command: CommandTemplate;
+          warning?: string;
+        };
+        emit({ type: 'confirm_request', pendingId, command, warning });
       }
       return JSON.stringify(output ?? 'ok');
     } catch (e) {

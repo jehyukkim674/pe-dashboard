@@ -15,7 +15,7 @@ type Item =
   | { kind: 'user'; text: string }
   | { kind: 'assistant'; text: string }
   | { kind: 'tool'; summary: string }
-  | { kind: 'confirm'; pendingId: string; command: CommandTemplate; resolved?: 'ok' | 'no' }
+  | { kind: 'confirm'; pendingId: string; command: CommandTemplate; warning?: string; resolved?: 'ok' | 'no' }
   | { kind: 'error'; text: string };
 
 const SESSION_ID = `s-${Date.now()}`;
@@ -52,7 +52,7 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
           onDashboardsChanged(); // 도구 실행마다 메인 대시보드 실시간 갱신
         }
         if (e.type === 'confirm_request') {
-          push({ kind: 'confirm', pendingId: e.pendingId, command: e.command });
+          push({ kind: 'confirm', pendingId: e.pendingId, command: e.command, warning: e.warning });
         }
         if (e.type === 'error') push({ kind: 'error', text: e.message });
       }, { signal: ac.signal, dashboardId });
@@ -114,11 +114,16 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
               case 'confirm':
                 return (
                   <Alert
-                    key={i} type="info" showIcon
+                    key={i} type={item.warning ? 'warning' : 'info'} showIcon
                     message={`명령 등록 요청: ${item.command.id}`}
                     description={
                       <>
                         <code>{item.command.argv.join(' ')}</code>
+                        {item.warning && (
+                          <Typography.Paragraph type="warning" style={{ marginTop: 8, marginBottom: 0 }}>
+                            ⚠️ {item.warning}. 정말 등록할까요?
+                          </Typography.Paragraph>
+                        )}
                         <div style={{ marginTop: 8 }}>
                           {item.resolved ? (
                             <Tag>{item.resolved === 'ok' ? '등록됨' : '거절됨'}</Tag>

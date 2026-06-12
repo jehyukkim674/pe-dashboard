@@ -43,6 +43,6 @@ export interface CommandResult {
 export type ChatEvent =
   | { type: 'text'; text: string }
   | { type: 'tool'; name: string; summary: string }
-  | { type: 'confirm_request'; pendingId: string; command: CommandTemplate }
+  | { type: 'confirm_request'; pendingId: string; command: CommandTemplate; warning?: string }
   | { type: 'error'; message: string }
   | { type: 'done' };

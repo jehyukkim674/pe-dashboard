@@ -3,7 +3,7 @@ import type { CommandTemplate } from '../types.js';
 export type ChatEvent =
   | { type: 'text'; text: string }
   | { type: 'tool'; name: string; summary: string }
-  | { type: 'confirm_request'; pendingId: string; command: CommandTemplate }
+  | { type: 'confirm_request'; pendingId: string; command: CommandTemplate; warning?: string }
   | { type: 'error'; message: string };
 
 // 사용자가 현재 보고 있는 화면 정보. AI가 화면의 위젯 데이터를 근거로 답하게 한다.

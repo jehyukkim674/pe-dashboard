@@ -1,6 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { DashboardStore } from '../dashboardStore.js';
 import { type CommandRegistry, validateTemplate } from '../commands/registry.js';
+import { assessArgv } from '../commands/safety.js';
 import type { PendingCommands } from '../commands/pending.js';
 import { runArgv } from '../commands/runner.js';
 import type { Widget } from '../types.js';
@@ -199,9 +200,16 @@ export function buildTools(ctx: ToolContext, opts: { readOnly?: boolean } = {}):
       params: string[];
     }) => {
       if (ctx.commands.get(input.id)) throw new Error(`template already exists: ${input.id}`);
-      validateTemplate({ ...input, builtin: false });
+      validateTemplate({ ...input, builtin: false }); // 파괴적 명령(block)은 여기서 거부됨
       const pendingId = ctx.pending.add({ ...input, builtin: false });
-      return { pendingId, status: 'pending_confirmation', command: input };
+      // warn 레벨이면 승인 UI에 경고를 띄워 사용자가 판단하게 한다
+      const safety = assessArgv(input.argv);
+      return {
+        pendingId,
+        status: 'pending_confirmation',
+        command: input,
+        warning: safety.level === 'warn' ? safety.reason : undefined,
+      };
     },
   };
 

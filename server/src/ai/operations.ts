@@ -36,8 +36,12 @@ export async function applyOperations(
         lastDashboardId = (output as { id: string }).id;
       }
       if (operation.op === 'register_command') {
-        const { pendingId, command } = output as { pendingId: string; command: CommandTemplate };
-        emit({ type: 'confirm_request', pendingId, command });
+        const { pendingId, command, warning } = output as {
+          pendingId: string;
+          command: CommandTemplate;
+          warning?: string;
+        };
+        emit({ type: 'confirm_request', pendingId, command, warning });
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);

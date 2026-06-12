@@ -34,9 +34,9 @@ export async function startServer(
   const dataSources = new DataSourceRegistry();
   dataSources.register(new CliSource(commands));
 
-  // 조회 전용 모드(기본 ON): AI는 데이터 조회·질문 응답만 가능하고
-  // 대시보드 생성·수정·삭제·명령 등록은 차단된다. AI_READONLY=false로 해제.
-  const aiReadOnly = process.env.AI_READONLY !== 'false';
+  // AI_READONLY=true면 조회 전용 모드: AI는 데이터 조회·질문 응답만 가능하고
+  // 대시보드 생성·수정·삭제·명령 등록이 차단된다. 기본은 편집 허용.
+  const aiReadOnly = process.env.AI_READONLY === 'true';
   const tools = buildTools({ store, commands, pending }, { readOnly: aiReadOnly });
 
   // 기본은 claude CLI. CHAT_ADAPTER=api + ANTHROPIC_API_KEY 설정 시 기존 API 모드.

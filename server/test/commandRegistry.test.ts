@@ -81,7 +81,7 @@ describe('CommandRegistry', () => {
   });
 
   describe('위험 명령 차단', () => {
-    it('rejects registration of dangerous binaries', async () => {
+    it('rejects registration of destructive binaries', async () => {
       await expect(
         registry.register({ id: 'rm_tmp', description: 'x', argv: ['rm', '-rf', '{p}'], params: ['p'] }),
       ).rejects.toThrow(/차단/);
@@ -89,30 +89,19 @@ describe('CommandRegistry', () => {
         registry.register({ id: 'as_root', description: 'x', argv: ['sudo', 'ls'], params: [] }),
       ).rejects.toThrow(/차단/);
       await expect(
-        registry.register({ id: 'via_shell', description: 'x', argv: ['bash', '-c', 'ls'], params: [] }),
+        registry.register({ id: 'wipe', description: 'x', argv: ['dd', 'if={a}', 'of={b}'], params: ['a', 'b'] }),
       ).rejects.toThrow(/차단/);
     });
 
-    it('rejects registration of mutating subcommands', async () => {
-      await expect(
-        registry.register({
-          id: 'git_push', description: 'x', argv: ['git', '-C', '{p}', 'push'], params: ['p'],
-        }),
-      ).rejects.toThrow(/차단/);
-      await expect(
-        registry.register({
-          id: 'k_delete', description: 'x', argv: ['kubectl', 'delete', 'pod', '{n}'], params: ['n'],
-        }),
-      ).rejects.toThrow(/차단/);
-      await expect(
-        registry.register({
-          id: 'argo_sync', description: 'x', argv: ['argocd', 'app', 'sync', '{app}'], params: ['app'],
-        }),
-      ).rejects.toThrow(/차단/);
-    });
-
-    it('rejects dangerous tokens smuggled in via param values at build time', () => {
-      expect(() => registry.buildArgv('argocd_app_get', { app: 'delete' })).toThrow(/차단/);
+    it('allows mutating subcommands to register (승인 단계 경고로 처리)', async () => {
+      await registry.register({
+        id: 'git_push', description: 'x', argv: ['git', '-C', '{p}', 'push'], params: ['p'],
+      });
+      await registry.register({
+        id: 'k_delete', description: 'x', argv: ['kubectl', 'delete', 'pod', '{n}'], params: ['n'],
+      });
+      expect(registry.get('git_push')).toBeDefined();
+      expect(registry.get('k_delete')).toBeDefined();
     });
 
     it('still allows builtin read-only templates', () => {

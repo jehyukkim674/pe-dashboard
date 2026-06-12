@@ -116,6 +116,27 @@ describe('AI tools', () => {
     ).rejects.toThrow(/invalid template id/);
   });
 
+  it('register_command rejects destructive binaries outright', async () => {
+    await expect(
+      tools.handlers.register_command({ id: 'rm_rf', description: 'x', argv: ['rm', '-rf', '{p}'], params: ['p'] }),
+    ).rejects.toThrow(/차단/);
+  });
+
+  it('register_command attaches a warning for mutating commands', async () => {
+    const out = (await tools.handlers.register_command({
+      id: 'k_delete', description: 'x', argv: ['kubectl', 'delete', 'pod', '{n}'], params: ['n'],
+    })) as { pendingId: string; warning?: string };
+    expect(out.pendingId).toBeDefined();
+    expect(out.warning).toMatch(/변경|삭제/);
+  });
+
+  it('register_command has no warning for read-only commands', async () => {
+    const out = (await tools.handlers.register_command({
+      id: 'docker_ps', description: 'x', argv: ['docker', 'ps', '--format', 'json'], params: [],
+    })) as { warning?: string };
+    expect(out.warning).toBeUndefined();
+  });
+
   describe('조회 전용 모드 (readOnly)', () => {
     let readOnlyTools: ToolKit;
 
