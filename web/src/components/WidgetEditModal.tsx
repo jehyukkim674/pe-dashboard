@@ -17,6 +17,7 @@ const TYPE_OPTIONS: { value: WidgetType; label: string }[] = [
   { value: 'table', label: 'Table (표)' },
   { value: 'chart', label: 'Chart (차트)' },
   { value: 'log', label: 'Log (텍스트 출력)' },
+  { value: 'status', label: 'Status (상태 타일 그리드)' },
   { value: 'text', label: 'Text (메모)' },
 ];
 
@@ -40,6 +41,9 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
   const [tableColumns, setTableColumns] = useState(
     Array.isArray(widget?.display?.columns) ? (widget.display.columns as string[]).join(', ') : '',
   );
+  const [statusLabelPath, setStatusLabelPath] = useState(display.labelPath ?? '');
+  const [statusStatePath, setStatusStatePath] = useState(display.statePath ?? '');
+  const [statusOkValues, setStatusOkValues] = useState(display.okValues ?? '');
   const [chartXKey, setChartXKey] = useState(display.xKey ?? '');
   const [chartYKey, setChartYKey] = useState(display.yKey ?? '');
   const [chartType, setChartType] = useState(display.chartType ?? 'line');
@@ -73,6 +77,8 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
       }
       case 'chart':
         return { xKey: chartXKey, yKey: chartYKey, chartType };
+      case 'status':
+        return { labelPath: statusLabelPath, statePath: statusStatePath, okValues: statusOkValues };
       case 'text':
         return { content: textContent };
       default:
@@ -206,6 +212,28 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
               <Select
                 value={chartType} onChange={setChartType}
                 options={[{ value: 'line', label: '라인' }, { value: 'bar', label: '바' }]}
+              />
+            </Form.Item>
+          </>
+        )}
+        {type === 'status' && (
+          <>
+            <Form.Item label="라벨 경로 (JSON)" required>
+              <Input
+                value={statusLabelPath} onChange={(e) => setStatusLabelPath(e.target.value)}
+                placeholder="예: metadata.name"
+              />
+            </Form.Item>
+            <Form.Item label="상태 값 경로 (JSON)" required>
+              <Input
+                value={statusStatePath} onChange={(e) => setStatusStatePath(e.target.value)}
+                placeholder="예: status.sync.status"
+              />
+            </Form.Item>
+            <Form.Item label="정상 값 (쉼표 구분 — 이 값이면 초록)">
+              <Input
+                value={statusOkValues} onChange={(e) => setStatusOkValues(e.target.value)}
+                placeholder="예: Synced, Healthy"
               />
             </Form.Item>
           </>

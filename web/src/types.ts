@@ -1,5 +1,5 @@
 // --- server/src/types.ts 와 동일하게 유지 (수동 동기화) ---
-export type WidgetType = 'stat' | 'table' | 'chart' | 'log' | 'text';
+export type WidgetType = 'stat' | 'table' | 'chart' | 'log' | 'text' | 'status';
 
 export interface WidgetLayout { x: number; y: number; w: number; h: number; }
 

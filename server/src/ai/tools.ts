@@ -42,7 +42,7 @@ const dataSourceSchema = {
 const widgetSchema = {
   type: 'object' as const,
   properties: {
-    type: { type: 'string', enum: ['stat', 'table', 'chart', 'log', 'text'] },
+    type: { type: 'string', enum: ['stat', 'table', 'chart', 'log', 'text', 'status'] },
     title: { type: 'string' },
     layout: layoutSchema,
     dataSource: dataSourceSchema,

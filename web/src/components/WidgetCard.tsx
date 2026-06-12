@@ -9,6 +9,7 @@ import TableWidget from './widgets/TableWidget';
 import ChartWidget from './widgets/ChartWidget';
 import LogWidget from './widgets/LogWidget';
 import TextWidget from './widgets/TextWidget';
+import StatusWidget from './widgets/StatusWidget';
 
 // 자동 갱신 주기 선택지. value 0 = 자동 갱신 없음(수동만)
 // 알림 권한 거부 안내는 세션당 1회만
@@ -82,6 +83,7 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, 
       case 'table': return <TableWidget result={result} display={widget.display} />;
       case 'chart': return <ChartWidget result={result} display={widget.display} />;
       case 'log': return <LogWidget result={result} />;
+      case 'status': return <StatusWidget result={result} display={widget.display} />;
     }
   })();
 

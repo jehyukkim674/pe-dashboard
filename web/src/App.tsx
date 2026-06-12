@@ -46,6 +46,18 @@ export default function App() {
     void refresh().catch((e) => void message.error(`목록 조회 실패: ${(e as Error).message}`));
   }, [refresh]);
 
+  // Cmd+K(맥)/Ctrl+K: AI 채팅 토글
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setChatOpen((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const selected = dashboards.find((d) => d.id === selectedId);
 
   const createDashboard = async () => {

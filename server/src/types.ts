@@ -1,4 +1,4 @@
-export type WidgetType = 'stat' | 'table' | 'chart' | 'log' | 'text';
+export type WidgetType = 'stat' | 'table' | 'chart' | 'log' | 'text' | 'status';
 
 export interface WidgetLayout {
   x: number;

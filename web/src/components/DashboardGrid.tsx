@@ -14,6 +14,7 @@ const DEFAULT_SIZE: Record<WidgetType, { w: number; h: number }> = {
   chart: { w: 6, h: 5 },
   log: { w: 6, h: 5 },
   text: { w: 4, h: 3 },
+  status: { w: 6, h: 4 },
 };
 
 // react-grid-layout v2: 기존 v1 API(draggableCancel 등)는 /legacy 진입점이 제공한다.
