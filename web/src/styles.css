@@ -14,6 +14,14 @@
   user-select: none;
 }
 
+/* 카드에 마우스를 올리면 살짝 떠오르는 느낌 */
+.react-grid-item .ant-card {
+  transition: box-shadow 0.15s;
+}
+.react-grid-item .ant-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
 /* 채팅 말풍선 */
 .chat-bubble {
   display: inline-block;

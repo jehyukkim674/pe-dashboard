@@ -39,7 +39,7 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, 
   onEdit: (draft: WidgetDraft) => void;
   onDuplicate: () => void;
 }) {
-  const { result, loading, reload, updatedAt } = useWidgetData(widget.dataSource);
+  const { result, lastGood, loading, reload, updatedAt } = useWidgetData(widget.dataSource);
   const [editOpen, setEditOpen] = useState(false);
   const now = useNow();
 
@@ -73,18 +73,33 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, 
     alertedRef.current = matched;
   }, [result, widget.alert, widget.title]);
 
+  // 실패해도 직전 정상 데이터를 계속 보여주고, 에러는 상단의 컴팩트 배너로 알린다
+  const shown = result?.ok === false && lastGood ? lastGood : result;
+  const errorBanner = result?.error && (
+    <div
+      title={result.error}
+      style={{
+        flexShrink: 0, fontSize: 11, color: '#fff', background: '#ff4d4f',
+        borderRadius: 4, padding: '2px 8px', marginBottom: 6,
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }}
+    >
+      {result.error}
+    </div>
+  );
+
   const body = (() => {
     if (widget.type === 'text') return <TextWidget display={widget.display} />;
-    if (loading && !result) return <Skeleton active title={false} paragraph={{ rows: 3 }} />;
-    if (result?.error) {
-      return <Alert type="warning" showIcon message={result.error} style={{ fontSize: 12 }} />;
+    if (loading && !shown) return <Skeleton active title={false} paragraph={{ rows: 3 }} />;
+    if (shown?.error && !lastGood) {
+      return <Alert type="warning" showIcon message={shown.error} style={{ fontSize: 12 }} />;
     }
     switch (widget.type) {
-      case 'stat': return <StatWidget result={result} display={widget.display} />;
-      case 'table': return <TableWidget result={result} display={widget.display} />;
-      case 'chart': return <ChartWidget result={result} display={widget.display} />;
-      case 'log': return <LogWidget result={result} />;
-      case 'status': return <StatusWidget result={result} display={widget.display} />;
+      case 'stat': return <StatWidget result={shown} display={widget.display} />;
+      case 'table': return <TableWidget result={shown} display={widget.display} />;
+      case 'chart': return <ChartWidget result={shown} display={widget.display} />;
+      case 'log': return <LogWidget result={shown} />;
+      case 'status': return <StatusWidget result={shown} display={widget.display} />;
     }
   })();
 
@@ -135,6 +150,7 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, 
       }
     >
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        {lastGood && errorBanner}
         <div className="widget-body" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>{body}</div>
         {widget.dataSource && updatedAt && (
           <div

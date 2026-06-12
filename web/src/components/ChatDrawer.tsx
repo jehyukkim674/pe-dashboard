@@ -241,10 +241,17 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
           <div ref={bottomRef} />
         </div>
         <Space.Compact style={{ width: '100%' }}>
-          <Input
-            placeholder={busy ? 'AI 작업 중…' : '말로 대시보드를 만들어보세요'}
+          <Input.TextArea
+            placeholder={busy ? 'AI 작업 중…' : '말로 대시보드를 만들어보세요 (Shift+Enter 줄바꿈)'}
             value={input} disabled={busy}
-            onChange={(e) => setInput(e.target.value)} onPressEnter={() => void send()}
+            autoSize={{ minRows: 1, maxRows: 5 }}
+            onChange={(e) => setInput(e.target.value)}
+            onPressEnter={(e) => {
+              if (!e.shiftKey) {
+                e.preventDefault();
+                void send();
+              }
+            }}
           />
           <Button type="primary" icon={<SendOutlined />} loading={busy} onClick={() => void send()} />
         </Space.Compact>

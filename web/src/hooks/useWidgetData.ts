@@ -4,6 +4,7 @@ import type { CommandResult, WidgetDataSource } from '../types';
 
 export function useWidgetData(dataSource?: WidgetDataSource) {
   const [result, setResult] = useState<CommandResult>();
+  const [lastGood, setLastGood] = useState<CommandResult>(); // 실패 시에도 직전 정상 데이터를 보여주기 위함
   const [updatedAt, setUpdatedAt] = useState<number>();
   const [loading, setLoading] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
@@ -30,6 +31,7 @@ export function useWidgetData(dataSource?: WidgetDataSource) {
         failures = r.ok ? 0 : failures + 1;
         if (alive) {
           setResult(r);
+          if (r.ok) setLastGood(r);
           setUpdatedAt(Date.now());
         }
       } catch (e) {
@@ -56,7 +58,7 @@ export function useWidgetData(dataSource?: WidgetDataSource) {
   // 수동 새로고침: effect를 재실행해 즉시 로드하고 폴링 타이머도 리셋한다
   const reload = () => setReloadTick((t) => t + 1);
 
-  return { result, loading, reload, updatedAt };
+  return { result, lastGood, loading, reload, updatedAt };
 }
 
 // 연속 실패 시 지수 백오프: 기본 주기 × 2^실패횟수, 최대 5분.

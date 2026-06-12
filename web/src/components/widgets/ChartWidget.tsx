@@ -16,13 +16,13 @@ export default function ChartWidget({ result, display }: {
   const chart = d.chartType === 'bar' ? (
     <BarChart data={data}>
       <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.25)" />
-      <XAxis dataKey={d.xKey} tick={{ fill: 'rgba(128,128,128,0.9)', fontSize: 11 }} /><YAxis tick={{ fill: 'rgba(128,128,128,0.9)', fontSize: 11 }} /><Tooltip />
+      <XAxis dataKey={d.xKey} tick={{ fill: 'rgba(128,128,128,0.9)', fontSize: 11 }} /><YAxis tick={{ fill: 'rgba(128,128,128,0.9)', fontSize: 11 }} /><Tooltip contentStyle={{ background: 'rgba(45,45,45,0.95)', border: 'none', borderRadius: 6 }} labelStyle={{ color: '#fff' }} itemStyle={{ color: '#9fd0ff' }} />
       <Bar dataKey={d.yKey} fill="#1677ff" />
     </BarChart>
   ) : (
     <LineChart data={data}>
       <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.25)" />
-      <XAxis dataKey={d.xKey} tick={{ fill: 'rgba(128,128,128,0.9)', fontSize: 11 }} /><YAxis tick={{ fill: 'rgba(128,128,128,0.9)', fontSize: 11 }} /><Tooltip />
+      <XAxis dataKey={d.xKey} tick={{ fill: 'rgba(128,128,128,0.9)', fontSize: 11 }} /><YAxis tick={{ fill: 'rgba(128,128,128,0.9)', fontSize: 11 }} /><Tooltip contentStyle={{ background: 'rgba(45,45,45,0.95)', border: 'none', borderRadius: 6 }} labelStyle={{ color: '#fff' }} itemStyle={{ color: '#9fd0ff' }} />
       <Line dataKey={d.yKey} stroke="#1677ff" dot={false} />
     </LineChart>
   );
