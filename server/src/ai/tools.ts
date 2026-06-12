@@ -48,8 +48,14 @@ const widgetSchema = {
   required: ['type', 'title', 'layout'],
 };
 
+// 조회 전용 모드에서 차단되는 변경성 도구. 새 변경성 도구를 추가하면 여기에도 등록한다.
+const MUTATING_TOOLS = new Set([
+  'create_dashboard', 'delete_dashboard', 'add_widget', 'update_widget',
+  'remove_widget', 'register_command',
+]);
+
 // 확장 포인트: 이 배열에 정의+핸들러 쌍을 추가하면 AI 능력이 늘어난다.
-export function buildTools(ctx: ToolContext): ToolKit {
+export function buildTools(ctx: ToolContext, opts: { readOnly?: boolean } = {}): ToolKit {
   const definitions: Anthropic.Tool[] = [
     {
       name: 'list_dashboards',
@@ -199,6 +205,19 @@ export function buildTools(ctx: ToolContext): ToolKit {
     },
   };
 
+  if (opts.readOnly) {
+    // 정의에서 변경성 도구를 숨기고, 핸들러는 차단 메시지를 던지도록 교체한다
+    // (모델이 그래도 변경을 시도하는 경우의 이중 방어).
+    const blocked = async () => {
+      throw new Error('조회 전용 모드: 변경 작업이 비활성화되어 있습니다 (서버 환경변수 AI_READONLY=false로 해제 가능)');
+    };
+    return {
+      definitions: definitions.filter((d) => !MUTATING_TOOLS.has(d.name)),
+      handlers: Object.fromEntries(
+        Object.entries(handlers).map(([name, h]) => [name, MUTATING_TOOLS.has(name) ? blocked : h]),
+      ),
+    };
+  }
   return { definitions, handlers };
 }
 

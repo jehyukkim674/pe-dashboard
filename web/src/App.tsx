@@ -87,7 +87,10 @@ export default function App() {
         icon={<CommentOutlined />} type="primary"
         tooltip="AI 채팅" onClick={() => setChatOpen(true)}
       />
-      <ChatDrawer open={chatOpen} onClose={() => setChatOpen(false)} onDashboardsChanged={refresh} />
+      <ChatDrawer
+        open={chatOpen} onClose={() => setChatOpen(false)}
+        onDashboardsChanged={refresh} dashboardId={selectedId}
+      />
       <UpdateModal manualCheckCount={updateCheckCount} />
 
       <Modal

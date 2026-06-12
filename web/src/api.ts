@@ -42,17 +42,18 @@ export const api = {
 
 // POST 기반 SSE: fetch 스트림에서 'data: {...}\n\n' 청크를 파싱해 이벤트 콜백.
 // signal로 진행 중인 스트림을 중단할 수 있다 (드로어 언마운트, 새 메시지 전송 시).
+// dashboardId를 보내면 AI가 현재 화면 위젯 데이터를 근거로 답한다.
 export async function streamChat(
   sessionId: string,
   message: string,
   onEvent: (e: ChatEvent) => void,
-  signal?: AbortSignal,
+  opts: { signal?: AbortSignal; dashboardId?: string } = {},
 ): Promise<void> {
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId, message }),
-    signal,
+    body: JSON.stringify({ sessionId, message, dashboardId: opts.dashboardId }),
+    signal: opts.signal,
   });
   if (!res.ok) throw new Error(`chat failed: ${res.status}`);
   if (!res.body) throw new Error('response body is null');

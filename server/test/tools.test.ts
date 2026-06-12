@@ -115,4 +115,33 @@ describe('AI tools', () => {
       tools.handlers.register_command({ id: 'bad id!', description: 'x', argv: ['echo'], params: [] }),
     ).rejects.toThrow(/invalid template id/);
   });
+
+  describe('조회 전용 모드 (readOnly)', () => {
+    let readOnlyTools: ToolKit;
+
+    beforeEach(async () => {
+      const dir = await mkdtemp(path.join(tmpdir(), 'tools-ro-'));
+      const roStore = new DashboardStore(path.join(dir, 'dashboards'));
+      await roStore.init();
+      const commands = new CommandRegistry(path.join(dir, 'commands.json'));
+      await commands.load();
+      readOnlyTools = buildTools({ store: roStore, commands, pending: new PendingCommands() }, { readOnly: true });
+    });
+
+    it('blocks mutating handlers', async () => {
+      await expect(readOnlyTools.handlers.create_dashboard({ name: 'x' })).rejects.toThrow(/조회 전용/);
+      await expect(readOnlyTools.handlers.delete_dashboard({ id: 'x' })).rejects.toThrow(/조회 전용/);
+      await expect(
+        readOnlyTools.handlers.register_command({ id: 'a', description: 'x', argv: ['ls'], params: [] }),
+      ).rejects.toThrow(/조회 전용/);
+    });
+
+    it('keeps read handlers and hides mutating definitions', async () => {
+      expect(await readOnlyTools.handlers.list_dashboards({})).toEqual([]);
+      expect(await readOnlyTools.handlers.list_commands({})).not.toHaveLength(0);
+      const names = readOnlyTools.definitions.map((d) => d.name);
+      expect(names).not.toContain('create_dashboard');
+      expect(names).toContain('list_dashboards');
+    });
+  });
 });

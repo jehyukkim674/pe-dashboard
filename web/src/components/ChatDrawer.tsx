@@ -8,6 +8,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onDashboardsChanged: () => void;
+  dashboardId?: string; // 현재 화면에 보이는 대시보드 — AI 응답의 데이터 근거
 }
 
 type Item =
@@ -19,7 +20,7 @@ type Item =
 
 const SESSION_ID = `s-${Date.now()}`;
 
-export default function ChatDrawer({ open, onClose, onDashboardsChanged }: Props) {
+export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboardId }: Props) {
   const [items, setItems] = useState<Item[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -54,7 +55,7 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged }: Props
           push({ kind: 'confirm', pendingId: e.pendingId, command: e.command });
         }
         if (e.type === 'error') push({ kind: 'error', text: e.message });
-      }, ac.signal);
+      }, { signal: ac.signal, dashboardId });
     } catch (e) {
       if ((e as Error).name !== 'AbortError') {
         push({ kind: 'error', text: (e as Error).message });
