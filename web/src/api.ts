@@ -33,6 +33,10 @@ export const api = {
   listCommands: () => fetch('/api/commands').then((r) => json<CommandTemplate[]>(r)),
 
   exportData: () => fetch('/api/export').then((r) => json<unknown>(r)),
+  commandLog: (limit = 200) =>
+    fetch(`/api/command-log?limit=${limit}`).then((r) =>
+      json<{ ts: string; argv: string[]; ok: boolean; exitCode: number | null; durationMs: number }[]>(r),
+    ),
   importData: (bundle: unknown) =>
     fetch('/api/import', {
       method: 'POST',

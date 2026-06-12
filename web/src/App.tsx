@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button, ConfigProvider, Empty, Input, Layout, Menu, message, Modal, Popconfirm, Typography, FloatButton, theme as antdTheme } from 'antd';
 import {
-  BulbOutlined, CommentOutlined, DeleteOutlined, DownloadOutlined, EditOutlined,
-  FullscreenOutlined, FullscreenExitOutlined, PlusOutlined, SyncOutlined, UploadOutlined,
+  BulbOutlined, CommentOutlined, CopyOutlined, DeleteOutlined, DownloadOutlined, EditOutlined,
+  FullscreenOutlined, FullscreenExitOutlined, HistoryOutlined, PlusOutlined, SyncOutlined,
+  UploadOutlined,
 } from '@ant-design/icons';
 import { api } from './api';
 import type { Dashboard } from './types';
 import DashboardGrid from './components/DashboardGrid';
 import ChatDrawer from './components/ChatDrawer';
 import UpdateModal from './components/UpdateModal';
+import CommandLogModal from './components/CommandLogModal';
 
 export default function App() {
   const [dashboards, setDashboards] = useState<Dashboard[]>([]);
@@ -21,6 +23,7 @@ export default function App() {
   const [updateCheckCount, setUpdateCheckCount] = useState(0);
   const [dark, setDark] = useState(() => localStorage.getItem('pe-dark') === '1');
   const [tvMode, setTvMode] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
 
   const toggleDark = () => {
     setDark((d) => {
@@ -81,6 +84,21 @@ export default function App() {
       await refresh();
     } catch (e) {
       void message.error(`대시보드 삭제 실패: ${(e as Error).message}`);
+    }
+  };
+
+  const duplicateDashboard = async (id: string) => {
+    try {
+      const source = dashboards.find((d) => d.id === id);
+      if (!source) return;
+      const created = await api.createDashboard(`${source.name} (복사)`);
+      await api.saveDashboard({
+        ...created,
+        widgets: source.widgets.map((w) => ({ ...w, id: crypto.randomUUID() })),
+      });
+      await refresh(created.id);
+    } catch (e) {
+      void message.error(`대시보드 복제 실패: ${(e as Error).message}`);
     }
   };
 
@@ -146,6 +164,11 @@ export default function App() {
                     onClick={() => setRenaming({ id: d.id, name: d.name })}
                     style={{ marginRight: 8 }}
                   />
+                  <CopyOutlined
+                    title="복제"
+                    onClick={() => void duplicateDashboard(d.id)}
+                    style={{ marginRight: 8 }}
+                  />
                   <Popconfirm
                     title={`'${d.name}' 대시보드를 삭제할까요?`}
                     description="위젯도 함께 삭제됩니다."
@@ -202,6 +225,13 @@ export default function App() {
         >
           가져오기
         </Button>
+        <Button
+          type="text" icon={<HistoryOutlined />} block
+          style={{ width: 'calc(100% - 32px)', margin: '8px 16px 0' }}
+          onClick={() => setLogOpen(true)}
+        >
+          실행 기록
+        </Button>
       </Layout.Sider>
       )}
 
@@ -230,6 +260,7 @@ export default function App() {
         onDashboardsChanged={refresh} dashboardId={selectedId}
       />
       <UpdateModal manualCheckCount={updateCheckCount} />
+      {logOpen && <CommandLogModal onClose={() => setLogOpen(false)} />}
 
       <Modal
         title="새 대시보드" open={creating} onOk={createDashboard}
