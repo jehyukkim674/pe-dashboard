@@ -12,18 +12,28 @@ export function useWidgetData(dataSource?: WidgetDataSource) {
   useEffect(() => {
     if (!dataSource) return;
     let alive = true;
-    let inFlight = false;
+    let failures = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    // setTimeout 체인: 이전 호출이 끝난 뒤에만 다음을 예약하므로 겹침이 없고,
+    // 연속 실패 시 백오프로 간격을 늘릴 수 있다 (수동 새로고침은 reloadTick으로 리셋)
+    const schedule = () => {
+      if (!alive || !dataSource.refreshSec) return;
+      const delaySec = backoffDelaySec(dataSource.refreshSec, failures);
+      timer = setTimeout(() => void load(true), delaySec * 1000);
+    };
+
     const load = async (isBackground: boolean) => {
-      if (inFlight) return; // 이전 호출이 끝나기 전 새 폴링 금지 (느린 명령 시 결과 역전 방지)
-      inFlight = true;
       if (!isBackground) setLoading(true);
       try {
         const r = await api.widgetData(dataSource);
+        failures = r.ok ? 0 : failures + 1;
         if (alive) {
           setResult(r);
           setUpdatedAt(Date.now());
         }
       } catch (e) {
+        failures++;
         if (alive) {
           setResult({
             ok: false, exitCode: null, stdout: '', stderr: '', error: (e as Error).message,
@@ -31,17 +41,14 @@ export function useWidgetData(dataSource?: WidgetDataSource) {
           setUpdatedAt(Date.now());
         }
       } finally {
-        inFlight = false;
         if (alive && !isBackground) setLoading(false);
+        schedule();
       }
     };
     void load(false);
-    const timer = dataSource.refreshSec
-      ? setInterval(() => void load(true), dataSource.refreshSec * 1000)
-      : undefined;
     return () => {
       alive = false;
-      if (timer) clearInterval(timer);
+      if (timer) clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, reloadTick]);
@@ -50,6 +57,13 @@ export function useWidgetData(dataSource?: WidgetDataSource) {
   const reload = () => setReloadTick((t) => t + 1);
 
   return { result, loading, reload, updatedAt };
+}
+
+// 연속 실패 시 지수 백오프: 기본 주기 × 2^실패횟수, 최대 5분.
+// 실패하는 명령(로그아웃된 argocd 등)을 의미 없이 계속 두드리지 않는다.
+export function backoffDelaySec(baseSec: number, failures: number): number {
+  if (failures === 0) return baseSec;
+  return Math.min(baseSec * 2 ** Math.min(failures, 10), 300);
 }
 
 // 상대 시각 표시용 현재 시각. intervalMs마다 리렌더를 유발한다.

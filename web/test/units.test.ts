@@ -26,3 +26,14 @@ describe('sanitizeNotes', () => {
     expect(out).not.toContain('javascript:');
   });
 });
+
+describe('backoffDelaySec', () => {
+  it('keeps base interval while healthy and backs off on failures', async () => {
+    const { backoffDelaySec } = await import('../src/hooks/useWidgetData');
+    expect(backoffDelaySec(10, 0)).toBe(10);
+    expect(backoffDelaySec(10, 1)).toBe(20);
+    expect(backoffDelaySec(10, 3)).toBe(80);
+    expect(backoffDelaySec(10, 10)).toBe(300); // 최대 5분
+    expect(backoffDelaySec(60, 4)).toBe(300);
+  });
+});
