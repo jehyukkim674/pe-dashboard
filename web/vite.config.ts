@@ -9,7 +9,8 @@ export default defineConfig({
   define: { 'process.env': {} },
   server: {
     port: 5173,
-    proxy: { '/api': 'http://localhost:5174' },
+    // dev 서버는 15174 (패키징 앱 5174와 분리 — 동시 실행해도 데이터가 섞이지 않음)
+    proxy: { '/api': 'http://localhost:15174' },
   },
   test: {
     environment: 'jsdom',
