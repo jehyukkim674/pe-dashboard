@@ -1,8 +1,27 @@
 import { app, BrowserWindow, dialog, ipcMain, type Rectangle } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { startServer } from '../../server/src/start.js';
 import { checkUpdateStatus, startInstall } from './updater.js';
+
+// Finder/독에서 실행된 앱은 셸 PATH(.zprofile 등)를 상속받지 못해
+// claude·gh·argocd 같은 CLI를 찾지 못한다. 로그인 셸의 PATH로 보정한다.
+function fixGuiPath(): void {
+  try {
+    const shell = process.env.SHELL ?? '/bin/zsh';
+    const shellPath = execFileSync(shell, ['-lc', 'echo -n "$PATH"'], {
+      encoding: 'utf8', timeout: 5_000,
+    });
+    if (shellPath.includes('/')) process.env.PATH = shellPath;
+  } catch {
+    // 로그인 셸 실패 시 아래 흔한 경로 추가로 폴백
+  }
+  const current = (process.env.PATH ?? '').split(':');
+  const extras = ['/opt/homebrew/bin', '/usr/local/bin', path.join(app.getPath('home'), '.local', 'bin')]
+    .filter((e) => !current.includes(e));
+  process.env.PATH = [...current, ...extras].join(':');
+}
 
 let win: BrowserWindow | null = null;
 
@@ -20,6 +39,7 @@ function loadBounds(): Partial<Rectangle> {
 }
 
 async function createWindow(): Promise<void> {
+  fixGuiPath();
   win = new BrowserWindow({
     width: 1600,
     height: 1000,
