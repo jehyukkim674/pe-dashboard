@@ -3,7 +3,7 @@ import { Button, ConfigProvider, Empty, Input, Layout, Menu, message, Modal, Pop
 import {
   BulbOutlined, CommentOutlined, CopyOutlined, DeleteOutlined, DownloadOutlined, EditOutlined,
   FullscreenOutlined, FullscreenExitOutlined, HistoryOutlined, PauseCircleOutlined,
-  PlayCircleOutlined, PlusOutlined, SearchOutlined, SyncOutlined, UploadOutlined,
+  PlayCircleOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SyncOutlined, UploadOutlined,
 } from '@ant-design/icons';
 import { api } from './api';
 import type { Dashboard } from './types';
@@ -11,6 +11,7 @@ import DashboardGrid from './components/DashboardGrid';
 import ChatDrawer from './components/ChatDrawer';
 import UpdateModal from './components/UpdateModal';
 import CommandLogModal from './components/CommandLogModal';
+import { pollControl, usePollControl } from './hooks/pollControl';
 
 export default function App() {
   const [dashboards, setDashboards] = useState<Dashboard[]>([]);
@@ -26,6 +27,7 @@ export default function App() {
   const [tvRotate, setTvRotate] = useState(() => localStorage.getItem('pe-tv-rotate') === '1');
   const [logOpen, setLogOpen] = useState(false);
   const [dashSearch, setDashSearch] = useState('');
+  const { paused } = usePollControl();
   const [siderWidth, setSiderWidth] = useState(() => {
     const saved = Number(localStorage.getItem('pe-sider-width'));
     return saved >= 160 && saved <= 420 ? saved : 220;
@@ -270,6 +272,17 @@ export default function App() {
             borderTop: '1px solid rgba(128,128,128,0.15)',
           }}
         >
+          <Tooltip title="전체 새로고침">
+            <Button type="text" size="small" icon={<ReloadOutlined />} onClick={() => pollControl.refreshAll()} />
+          </Tooltip>
+          <Tooltip title={paused ? '폴링 재개' : '전체 폴링 일시정지'}>
+            <Button
+              type="text" size="small"
+              icon={paused ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
+              onClick={() => pollControl.togglePause()}
+              style={paused ? { color: '#faad14' } : undefined}
+            />
+          </Tooltip>
           <Tooltip title="업데이트 확인">
             <Button type="text" size="small" icon={<SyncOutlined />} onClick={() => setUpdateCheckCount((c) => c + 1)} />
           </Tooltip>

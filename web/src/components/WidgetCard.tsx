@@ -41,10 +41,17 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, 
   onChangeDisplay?: (display: Record<string, unknown>) => void;
   highlight?: boolean;
 }) {
-  const { result, lastGood, loading, reload, updatedAt } = useWidgetData(widget.dataSource);
+  const { result, lastGood, loading, reload, updatedAt, lastGoodAt } = useWidgetData(widget.dataSource);
   const [editOpen, setEditOpen] = useState(false);
   const [rawOpen, setRawOpen] = useState(false);
   const now = useNow();
+
+  // 신선도: 명령이 계속 실패해 직전 정상 데이터를 보여줄 때, 그 데이터가 얼마나 오래됐는지.
+  // 갱신 주기의 3배(최소 2분)를 넘으면 '오래됨'으로 보고 본문을 흐리게 + 경고를 띄운다.
+  const refreshSecVal = widget.dataSource?.refreshSec ?? 0;
+  const staleThresholdMs = Math.max((refreshSecVal || 30) * 3, 120) * 1000;
+  const staleAgeMs = result?.ok === false && lastGoodAt ? now - lastGoodAt : 0;
+  const isStale = staleAgeMs > staleThresholdMs;
 
   // AI가 설정한 비표준 주기(예: 15초)도 select에 그대로 보이게 동적 옵션 추가
   const refreshSec = widget.dataSource?.refreshSec ?? 0;
@@ -160,7 +167,23 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, 
     >
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
         {lastGood && errorBanner}
-        <div className="widget-body" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>{body}</div>
+        {isStale && (
+          <div
+            style={{
+              flexShrink: 0, fontSize: 11, color: '#fff', background: '#faad14',
+              borderRadius: 4, padding: '2px 8px', marginBottom: 6,
+            }}
+          >
+            ⚠ 오래된 데이터 — 마지막 정상 {lastGoodAt && relativeTime(lastGoodAt, now)}
+          </div>
+        )}
+        {/* 오래된 데이터는 흐리게 처리해 '지금 값'이 아님을 한눈에 알린다 */}
+        <div
+          className="widget-body"
+          style={{ flex: 1, minHeight: 0, overflow: 'auto', opacity: isStale ? 0.5 : 1 }}
+        >
+          {body}
+        </div>
         {widget.dataSource && updatedAt && (
           <div
             style={{
