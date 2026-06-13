@@ -83,6 +83,31 @@ describe('TableWidget', () => {
     expect(screen.getByText('행 상세')).toBeTruthy();
   });
 
+  it('copies currently displayed rows as TSV to clipboard', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const { container } = render(<TableWidget result={result} />);
+
+    // 검색으로 OutOfSync 한 행만 남긴 뒤 복사 → 헤더 + 그 행만 TSV로
+    fireEvent.change(screen.getByPlaceholderText('검색'), { target: { value: 'outof' } });
+    fireEvent.click(container.querySelector('.anticon-download')!.closest('button')!);
+    fireEvent.click(await screen.findByText('클립보드 복사 (TSV)'));
+
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText.mock.calls[0][0]).toBe('name\tstatus\napi-server\tOutOfSync');
+  });
+
+  it('renders a large dataset without crashing and shows the counter', () => {
+    const big: CommandResult = {
+      ok: true, exitCode: 0, stdout: '', stderr: '',
+      json: Array.from({ length: 250 }, (_, i) => ({ name: `app-${i}`, status: i % 2 ? 'Synced' : 'OutOfSync' })),
+    };
+    render(<TableWidget result={big} />);
+    fireEvent.change(screen.getByPlaceholderText('검색'), { target: { value: 'app-1' } });
+    // app-1, app-10~19, app-1xx … 일부만 — 카운터가 부분 표시를 알린다
+    expect(screen.getByText(/250건 중 \d+건 표시/)).toBeTruthy();
+  });
+
   it('reorders columns by header drag and drop', () => {
     const onDisplayChange = vi.fn();
     const { container } = render(
