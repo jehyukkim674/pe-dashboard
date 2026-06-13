@@ -56,7 +56,8 @@ export default function UpdateModal({ manualCheckCount }: Props) {
     setPercent(0);
     const off = updater.onProgress((value) => setPercent(value));
     try {
-      await updater.install(); // 100% 도달 후 앱이 스스로 재시작
+      await updater.install(); // 다운로드 완료까지. 재시작은 사용자가 직접
+      setPercent(100); // 완료 확정 (진행률 100 이벤트와의 경쟁 제거 → 재시작 버튼 노출)
     } catch (e) {
       setPercent(undefined);
       void message.error(`업데이트 실패: ${(e as Error).message}`);
@@ -65,7 +66,10 @@ export default function UpdateModal({ manualCheckCount }: Props) {
     }
   };
 
-  const downloading = percent !== undefined;
+  const restart = () => void window.appUpdater?.restart();
+
+  const downloading = percent !== undefined && percent < 100;
+  const downloaded = percent === 100;
   return (
     <Modal
       title={`새 버전 v${update?.version ?? ''} (현재 v${update?.currentVersion ?? ''})`}
@@ -74,10 +78,15 @@ export default function UpdateModal({ manualCheckCount }: Props) {
       closable={!downloading}
       mask={{ closable: false }}
       footer={
-        downloading ? null : [
-          <Button key="later" onClick={() => setUpdate(undefined)}>나중에</Button>,
-          <Button key="go" type="primary" onClick={() => void install()}>업데이트</Button>,
-        ]
+        downloading ? null
+          : downloaded ? [
+              <Button key="later" onClick={() => setUpdate(undefined)}>나중에 재시작</Button>,
+              <Button key="restart" type="primary" onClick={restart}>지금 재시작</Button>,
+            ]
+          : [
+              <Button key="later" onClick={() => setUpdate(undefined)}>나중에</Button>,
+              <Button key="go" type="primary" onClick={() => void install()}>업데이트</Button>,
+            ]
       }
     >
       {update?.notes && (
@@ -87,8 +96,13 @@ export default function UpdateModal({ manualCheckCount }: Props) {
           <div dangerouslySetInnerHTML={{ __html: sanitizeNotes(update.notes) }} />
         </Typography>
       )}
-      {downloading && (
-        <Progress percent={percent} status={percent !== undefined && percent < 100 ? 'active' : 'success'} />
+      {percent !== undefined && (
+        <Progress percent={percent} status={percent < 100 ? 'active' : 'success'} />
+      )}
+      {downloaded && (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          다운로드 완료 — 지금 재시작하면 새 버전으로 전환됩니다. 나중에 앱을 종료해도 자동 적용됩니다.
+        </Typography.Text>
       )}
     </Modal>
   );

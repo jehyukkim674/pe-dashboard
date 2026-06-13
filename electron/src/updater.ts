@@ -40,7 +40,8 @@ export async function checkUpdateStatus(): Promise<UpdateCheck> {
   }
 }
 
-// 다운로드 진행률 0~99% 송출, 완료 시 100% 표시 후 재시작 (DataMigration UX 동일)
+// 다운로드 진행률 0~99% 송출, 완료 시 100% 송출. 재시작은 사용자가 '지금 재시작'을 눌러야 한다
+// (electron-updater 기본값 autoInstallOnAppQuit=true라, 나중에 종료해도 자동 적용된다).
 export async function startInstall(win: BrowserWindow): Promise<void> {
   // electron-updater는 다운로드 전에 같은 세션의 체크 상태를 요구한다
   // ("Please check update first"). 직전에 한 번 더 체크해 상태를 보장한다.
@@ -54,12 +55,14 @@ export async function startInstall(win: BrowserWindow): Promise<void> {
   autoUpdater.removeAllListeners('download-progress');
   autoUpdater.removeAllListeners('update-downloaded');
   autoUpdater.on('download-progress', (p) => send(Math.min(99, Math.round(p.percent))));
-  autoUpdater.once('update-downloaded', () => {
-    send(100);
-    setTimeout(() => autoUpdater.quitAndInstall(), 500); // 100% 표시할 시간
-  });
+  autoUpdater.once('update-downloaded', () => send(100));
   send(0);
   await autoUpdater.downloadUpdate();
+}
+
+// 다운로드된 업데이트를 적용하며 앱을 재시작한다 (사용자가 '지금 재시작' 클릭 시)
+export function restartToUpdate(): void {
+  autoUpdater.quitAndInstall();
 }
 
 function flattenNotes(notes: unknown): string {

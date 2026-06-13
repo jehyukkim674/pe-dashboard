@@ -12,6 +12,7 @@ declare global {
     appUpdater?: {
       check: () => Promise<UpdateCheckPayload>;
       install: () => Promise<void>;
+      restart: () => Promise<void>;
       onProgress: (cb: (percent: number) => void) => () => void;
     };
   }
