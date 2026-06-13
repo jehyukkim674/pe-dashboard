@@ -8,6 +8,7 @@ import { DashboardStore } from '../src/dashboardStore.js';
 import { CommandRegistry } from '../src/commands/registry.js';
 import { PendingCommands } from '../src/commands/pending.js';
 import { PgProfiles } from '../src/datasources/pgProfiles.js';
+import { HttpProfiles } from '../src/datasources/httpProfiles.js';
 import { DataSourceRegistry } from '../src/datasources/registry.js';
 import { CliSource } from '../src/datasources/cliSource.js';
 
@@ -28,7 +29,8 @@ describe('routes', () => {
       store, commands, dataSources, pending,
       tools: buildTools({ store, commands, pending }),
       pgProfiles: new PgProfiles('/tmp/pe-test-pg-profiles.json'),
-      chatService: { chat: async () => {} } as never, // chat 라우트는 수동 검증
+      httpProfiles: new HttpProfiles('/tmp/pe-test-http-profiles.json'),
+      chatService: { chat: async () => {}, clearSession: () => {} } as never, // chat 라우트는 수동 검증
     };
     app = await buildApp(deps);
   });

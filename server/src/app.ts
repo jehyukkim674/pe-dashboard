@@ -12,7 +12,9 @@ import { widgetDataRoutes } from './routes/widgetData.js';
 import { chatRoutes } from './routes/chat.js';
 import { exportImportRoutes } from './routes/exportImport.js';
 import { pgProfileRoutes } from './routes/pgProfiles.js';
+import { httpProfileRoutes } from './routes/httpProfiles.js';
 import type { PgProfiles } from './datasources/pgProfiles.js';
+import type { HttpProfiles } from './datasources/httpProfiles.js';
 
 export interface AppDeps {
   store: DashboardStore;
@@ -22,6 +24,7 @@ export interface AppDeps {
   chatService: ChatAdapter;
   tools: ToolKit;
   pgProfiles: PgProfiles;
+  httpProfiles: HttpProfiles;
 }
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
@@ -33,5 +36,6 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   chatRoutes(app, deps.chatService);
   exportImportRoutes(app, deps.store, deps.commands);
   pgProfileRoutes(app, deps.pgProfiles);
+  httpProfileRoutes(app, deps.httpProfiles);
   return app;
 }

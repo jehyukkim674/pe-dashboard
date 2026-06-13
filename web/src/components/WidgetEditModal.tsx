@@ -39,6 +39,9 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
   const [commandId, setCommandId] = useState(ds?.commandId ?? '');
   const [params, setParams] = useState<Record<string, string>>(ds?.params ?? {});
   const [url, setUrl] = useState(ds?.url ?? '');
+  const [httpProfile, setHttpProfile] = useState(ds?.httpProfile ?? '');
+  const [httpNames, setHttpNames] = useState<string[]>([]);
+  const [newHttpProfile, setNewHttpProfile] = useState<{ name: string; headersText: string }>();
   // display 옵션 (타입별로 저장 시 필요한 것만 추려서 보존)
   const [statMetric, setStatMetric] = useState(display.metric ?? 'count');
   const [statPath, setStatPath] = useState(display.path ?? '');
@@ -62,7 +65,35 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
       .then(setTemplates)
       .catch((e) => void message.error(`명령 목록 조회 실패: ${(e as Error).message}`));
     api.pgProfiles().then(setPgNames).catch(() => {});
+    api.httpProfiles().then(setHttpNames).catch(() => {});
   }, []);
+
+  // 헤더 텍스트("Authorization: Bearer xxx" 줄마다)를 Record로 파싱
+  const parseHeaders = (text: string): Record<string, string> => {
+    const headers: Record<string, string> = {};
+    for (const line of text.split('\n')) {
+      const idx = line.indexOf(':');
+      if (idx <= 0) continue;
+      const key = line.slice(0, idx).trim();
+      const value = line.slice(idx + 1).trim();
+      if (key && value) headers[key] = value;
+    }
+    return headers;
+  };
+
+  const addHttpProfile = async () => {
+    if (!newHttpProfile?.name.trim()) return;
+    const headers = parseHeaders(newHttpProfile.headersText);
+    if (Object.keys(headers).length === 0) return void message.warning('헤더를 "이름: 값" 형식으로 한 줄 이상 입력하세요');
+    try {
+      await api.addHttpProfile(newHttpProfile.name.trim(), headers);
+      setHttpNames(await api.httpProfiles());
+      setHttpProfile(newHttpProfile.name.trim());
+      setNewHttpProfile(undefined);
+    } catch (e) {
+      void message.error((e as Error).message);
+    }
+  };
 
   const addProfile = async () => {
     if (!newProfile?.name.trim() || !newProfile.connString.trim()) return;
@@ -125,7 +156,10 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
         draft.dataSource = { kind: 'cli', commandId, params: next, refreshSec: ds?.refreshSec };
       } else if (sourceKind === 'http') {
         if (!/^https?:\/\//.test(url.trim())) return void message.warning('http(s):// URL을 입력하세요');
-        draft.dataSource = { kind: 'http', commandId: '', params: {}, url: url.trim(), refreshSec: ds?.refreshSec };
+        draft.dataSource = {
+          kind: 'http', commandId: '', params: {}, url: url.trim(),
+          ...(httpProfile && { httpProfile }), refreshSec: ds?.refreshSec,
+        };
       } else {
         if (!pgProfile) return void message.warning('Postgres 프로필을 선택하세요');
         if (!/^\s*(select|with)\b/i.test(pgQuery)) return void message.warning('SELECT/WITH 쿼리만 가능합니다');
@@ -199,9 +233,41 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
                 )}
               </>
             ) : sourceKind === 'http' ? (
-              <Form.Item label="URL" required>
-                <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://api.example.com/status" />
-              </Form.Item>
+              <>
+                <Form.Item label="URL" required>
+                  <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://api.example.com/status" />
+                </Form.Item>
+                <Form.Item label="인증 프로필 (선택 — 헤더 값은 서버에만 저장)">
+                  <Select
+                    value={httpProfile || undefined} onChange={setHttpProfile} placeholder="없음 (익명 GET)"
+                    allowClear options={httpNames.map((n) => ({ value: n, label: n }))}
+                    popupRender={(menu) => (
+                      <>
+                        {menu}
+                        <div style={{ padding: 6 }}>
+                          <a onClick={() => setNewHttpProfile({ name: '', headersText: '' })}>+ 새 프로필 등록</a>
+                        </div>
+                      </>
+                    )}
+                  />
+                </Form.Item>
+                {newHttpProfile && (
+                  <Form.Item label="새 인증 프로필 (헤더는 줄마다 '이름: 값')">
+                    <Input
+                      value={newHttpProfile.name} placeholder="이름 (예: internal-api)"
+                      onChange={(e) => setNewHttpProfile({ ...newHttpProfile, name: e.target.value })}
+                      style={{ marginBottom: 6 }}
+                    />
+                    <Input.TextArea
+                      value={newHttpProfile.headersText} rows={2}
+                      placeholder={'Authorization: Bearer xxxxx\nX-Api-Key: yyyyy'}
+                      onChange={(e) => setNewHttpProfile({ ...newHttpProfile, headersText: e.target.value })}
+                      style={{ marginBottom: 6 }}
+                    />
+                    <a onClick={() => void addHttpProfile()}>등록</a>
+                  </Form.Item>
+                )}
+              </>
             ) : (
               <>
                 <Form.Item label="연결 프로필" required>

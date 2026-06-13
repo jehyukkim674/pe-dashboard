@@ -14,6 +14,7 @@ import { PendingCommands } from './commands/pending.js';
 import { DataSourceRegistry } from './datasources/registry.js';
 import { CliSource } from './datasources/cliSource.js';
 import { HttpSource } from './datasources/httpSource.js';
+import { HttpProfiles } from './datasources/httpProfiles.js';
 import { PgProfiles } from './datasources/pgProfiles.js';
 import { PostgresSource } from './datasources/postgresSource.js';
 import { buildTools } from './ai/tools.js';
@@ -47,10 +48,12 @@ export async function startServer(
 
   const pgProfiles = new PgProfiles(path.join(opts.dataDir, 'pg-profiles.json'));
   await pgProfiles.load();
+  const httpProfiles = new HttpProfiles(path.join(opts.dataDir, 'http-profiles.json'));
+  await httpProfiles.load();
 
   const dataSources = new DataSourceRegistry();
   dataSources.register(new CliSource(commands, commandCache));
-  dataSources.register(new HttpSource());
+  dataSources.register(new HttpSource(httpProfiles));
   dataSources.register(new PostgresSource(pgProfiles));
 
   // AI_READONLY=true면 조회 전용 모드: AI는 데이터 조회·질문 응답만 가능하고
@@ -67,7 +70,7 @@ export async function startServer(
           readOnly: aiReadOnly, cache: commandCache,
         });
 
-  const app = await buildApp({ store, commands, pending, dataSources, chatService, tools, pgProfiles });
+  const app = await buildApp({ store, commands, pending, dataSources, chatService, tools, pgProfiles, httpProfiles });
 
   if (opts.staticDir) {
     await fs.access(path.join(opts.staticDir, 'index.html')).catch(() => {

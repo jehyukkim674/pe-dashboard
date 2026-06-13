@@ -40,6 +40,13 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, connString }),
     }).then((r) => json<{ added: string }>(r)),
+  httpProfiles: () => fetch('/api/http-profiles').then((r) => json<string[]>(r)),
+  addHttpProfile: (name: string, headers: Record<string, string>) =>
+    fetch('/api/http-profiles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, headers }),
+    }).then((r) => json<{ added: string }>(r)),
   commandLog: (limit = 200) =>
     fetch(`/api/command-log?limit=${limit}`).then((r) =>
       json<{ ts: string; argv: string[]; ok: boolean; exitCode: number | null; durationMs: number }[]>(r),
