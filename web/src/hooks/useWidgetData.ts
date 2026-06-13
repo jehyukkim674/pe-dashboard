@@ -17,9 +17,11 @@ export function useWidgetData(dataSource?: WidgetDataSource) {
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     // setTimeout 체인: 이전 호출이 끝난 뒤에만 다음을 예약하므로 겹침이 없고,
-    // 연속 실패 시 백오프로 간격을 늘릴 수 있다 (수동 새로고침은 reloadTick으로 리셋)
+    // 연속 실패 시 백오프로 간격을 늘릴 수 있다 (수동 새로고침은 reloadTick으로 리셋).
+    // 탭/창이 가려져 있으면 예약하지 않는다 — 안 보는 대시보드가 백그라운드에서
+    // 계속 CLI 프로세스를 스폰하는 낭비를 막고, 다시 보일 때 즉시 새로고침한다.
     const schedule = () => {
-      if (!alive || !dataSource.refreshSec) return;
+      if (!alive || !dataSource.refreshSec || document.hidden) return;
       const delaySec = backoffDelaySec(dataSource.refreshSec, failures);
       timer = setTimeout(() => void load(true), delaySec * 1000);
     };
@@ -47,10 +49,22 @@ export function useWidgetData(dataSource?: WidgetDataSource) {
         schedule();
       }
     };
+    // 탭이 가려지면 대기 중 타이머를 멈추고, 다시 보이면 즉시 1회 새로고침 후 재개
+    const onVisibility = () => {
+      if (document.hidden) {
+        if (timer) clearTimeout(timer);
+        timer = undefined;
+      } else if (dataSource.refreshSec) {
+        void load(true);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
     void load(false);
     return () => {
       alive = false;
       if (timer) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, reloadTick]);

@@ -9,6 +9,7 @@ describe('relativeTime', () => {
     expect(relativeTime(base, base + 32_000)).toBe('32초 전');
     expect(relativeTime(base, base + 5 * 60_000)).toBe('5분 전');
     expect(relativeTime(base, base + 2 * 3_600_000)).toBe('2시간 전');
+    expect(relativeTime(base, base + 3 * 86_400_000)).toBe('3일 전');
   });
   it('never goes negative', () => {
     expect(relativeTime(base + 10_000, base)).toBe('방금');
