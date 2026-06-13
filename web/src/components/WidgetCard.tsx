@@ -98,7 +98,7 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, 
       return <Alert type="warning" showIcon message={shown.error} style={{ fontSize: 12 }} />;
     }
     switch (widget.type) {
-      case 'stat': return <StatWidget result={shown} display={widget.display} />;
+      case 'stat': return <StatWidget result={shown} display={widget.display} widgetId={widget.id} updatedAt={updatedAt} />;
       case 'table': return <TableWidget result={shown} display={widget.display} onDisplayChange={onChangeDisplay} />;
       case 'chart': return <ChartWidget result={shown} display={widget.display} />;
       case 'log': return <LogWidget result={shown} />;
