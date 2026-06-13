@@ -303,4 +303,19 @@ describe('ClaudeCliAdapter', () => {
     expect(secondPrompt).toContain('첫 질문');
     expect(secondPrompt).toContain('첫 답');
   });
+
+  it('clearSession removes history so the next prompt starts fresh', async () => {
+    const { adapter, calls } = await makeAdapter([
+      envelope('{"reply":"첫 답","operations":[]}'),
+      envelope('{"reply":"둘째 답","operations":[]}'),
+    ]);
+    const { emit } = collect();
+    await adapter.chat('s1', '첫 질문', emit);
+    adapter.clearSession('s1');
+    await adapter.chat('s1', '둘째 질문', emit);
+
+    const secondPrompt = calls[1][calls[1].indexOf('-p') + 1];
+    expect(secondPrompt).not.toContain('첫 질문');
+    expect(secondPrompt).not.toContain('첫 답');
+  });
 });

@@ -63,6 +63,17 @@
 .chat-assistant code { font-size: 12px; }
 .chat-assistant ul, .chat-assistant ol { padding-left: 20px; margin: 4px 0; }
 
+/* AI 답변 복사 버튼: 말풍선에 마우스를 올렸을 때만 보인다 */
+.chat-copy {
+  opacity: 0;
+  transition: opacity 0.15s;
+  margin-left: 6px;
+  cursor: pointer;
+  color: rgba(128, 128, 128, 0.85);
+  font-size: 12px;
+}
+.chat-msg:hover .chat-copy { opacity: 1; }
+
 /* TV 모드: 멀리서 보는 용도 — 글씨·수치·타일 확대, 편집용 툴바 숨김 */
 .tv-mode .ant-card-head-title { font-size: 17px; }
 .tv-mode .widget-body { font-size: 15px; }

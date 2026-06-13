@@ -51,6 +51,9 @@ export const api = {
       body: JSON.stringify(bundle),
     }).then((r) => json<{ dashboards: number; commands: number; skipped: string[] }>(r)),
 
+  clearChatSession: (sessionId: string) =>
+    fetch(`/api/chat/session/${sessionId}`, { method: 'DELETE' }).then((r) => json<{ ok: boolean }>(r)),
+
   confirmCommand: (pendingId: string) =>
     fetch(`/api/commands/pending/${pendingId}/confirm`, { method: 'POST' }).then((r) =>
       json<{ registered: string; applied: number; errors: string[] }>(r),

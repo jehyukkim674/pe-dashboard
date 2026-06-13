@@ -2,6 +2,13 @@ import type { FastifyInstance } from 'fastify';
 import type { ChatAdapter, ChatEvent } from '../ai/adapter.js';
 
 export function chatRoutes(app: FastifyInstance, chatService: ChatAdapter): void {
+  // 대화 초기화: 서버가 들고 있는 세션 히스토리(AI 기억)를 삭제한다
+  app.delete('/api/chat/session/:sessionId', async (req) => {
+    const { sessionId } = req.params as { sessionId: string };
+    chatService.clearSession(sessionId);
+    return { ok: true };
+  });
+
   app.post('/api/chat', async (req, reply) => {
     const { sessionId, message, dashboardId, model } = req.body as {
       sessionId?: string;

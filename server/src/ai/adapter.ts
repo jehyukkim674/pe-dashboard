@@ -22,4 +22,6 @@ export interface ChatAdapter {
     emit: (e: ChatEvent) => void,
     context?: ChatContext,
   ): Promise<void>;
+  // 대화 초기화: 세션의 히스토리(AI 기억)를 삭제한다
+  clearSession(sessionId: string): void;
 }

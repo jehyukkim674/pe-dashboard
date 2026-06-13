@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Drawer, Input, Select, Space, Tag, Tooltip, Typography, message as antdMessage } from 'antd';
-import { CheckOutlined, ClearOutlined, CloseOutlined, SendOutlined, ToolOutlined } from '@ant-design/icons';
+import {
+  CheckOutlined, ClearOutlined, CloseOutlined, CopyOutlined, RedoOutlined, SendOutlined,
+  StopOutlined, ToolOutlined,
+} from '@ant-design/icons';
 import { marked } from 'marked';
 import { api, streamChat } from '../api';
 import { sanitizeHtml } from '../utils/sanitize';
@@ -25,14 +28,25 @@ type Item =
   | { kind: 'confirm'; pendingId: string; command: CommandTemplate; warning?: string; resolved?: 'ok' | 'no' }
   | { kind: 'error'; text: string };
 
-// 세션 id와 대화 내역을 localStorage에 보존해 앱 재시작 후에도 이어 보이게 한다
-const SESSION_ID = (() => {
-  const saved = localStorage.getItem('pe-chat-session') ?? `s-${Date.now()}`;
-  localStorage.setItem('pe-chat-session', saved);
-  return saved;
-})();
+// 세션 id와 대화 내역을 localStorage에 보존해 앱 재시작 후에도 이어 보이게 한다.
+// 대화 초기화 시 새 id를 발급해 서버의 세션 기억과도 확실히 분리한다.
+const SESSION_KEY = 'pe-chat-session';
 const HISTORY_KEY = 'pe-chat-history';
 const HISTORY_MAX = 100;
+
+function loadSessionId(): string {
+  const saved = localStorage.getItem(SESSION_KEY) ?? `s-${Date.now()}`;
+  localStorage.setItem(SESSION_KEY, saved);
+  return saved;
+}
+
+// 빈 대화일 때 보여주는 추천 프롬프트 (클릭하면 입력창에 채워짐)
+const SUGGESTIONS = [
+  '배포 현황 대시보드 만들고 argocd 앱 목록 테이블 넣어줘',
+  '지금 보고 있는 대시보드에서 비정상인 항목 있어?',
+  '이 대시보드에 전체 개수 stat 위젯 추가해줘',
+  '위젯들 보기 좋게 재배치해줘',
+];
 
 function loadHistory(): Item[] {
   try {
@@ -55,6 +69,7 @@ const MODEL_OPTIONS = [
 ];
 
 export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboardId }: Props) {
+  const [sessionId, setSessionId] = useState(loadSessionId);
   const [items, setItems] = useState<Item[]>(loadHistory);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -80,13 +95,23 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
     localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(-HISTORY_MAX)));
   }, [items]);
 
+  // 진짜 초기화: 화면 내역 + 서버 세션 기억을 함께 비우고 새 세션 id로 시작한다
   const clearHistory = () => {
+    abortRef.current?.abort();
     setItems([]);
     localStorage.removeItem(HISTORY_KEY);
+    api.clearChatSession(sessionId).catch((e) => console.error('세션 초기화 실패', e));
+    const next = `s-${Date.now()}`;
+    localStorage.setItem(SESSION_KEY, next);
+    setSessionId(next);
+    void antdMessage.success('대화를 초기화했습니다 (AI 기억 포함)');
   };
 
-  const send = async () => {
-    const text = input.trim();
+  // 응답 생성 중단 (서버가 claude 프로세스도 함께 종료한다)
+  const stop = () => abortRef.current?.abort();
+
+  const send = async (overrideText?: string) => {
+    const text = (overrideText ?? input).trim();
     if (!text || busy) return;
     setInput('');
     push({ kind: 'user', text });
@@ -95,7 +120,7 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
     abortRef.current = ac;
     setBusy(true);
     try {
-      await streamChat(SESSION_ID, text, (e: ChatEvent) => {
+      await streamChat(sessionId, text, (e: ChatEvent) => {
         if (e.type === 'status') setStage(e.stage);
         if (e.type === 'text') {
           setStage(undefined);
@@ -118,6 +143,21 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
       setBusy(false);
       setStage(undefined);
     }
+  };
+
+  // 마지막 사용자 메시지를 다시 보낸다 (에러 후 재시도)
+  const retryLast = () => {
+    const lastUser = [...items].reverse().find((it) => it.kind === 'user');
+    if (lastUser && lastUser.kind === 'user') void send(lastUser.text);
+  };
+
+  const copyText = (text: string) => {
+    navigator.clipboard.writeText(text)
+      .then(() => void antdMessage.success('복사했습니다'))
+      .catch((e) => {
+        console.error('클립보드 복사 실패', e);
+        void antdMessage.error('복사에 실패했습니다');
+      });
   };
 
   const resolveConfirm = async (pendingId: string, accept: boolean) => {
@@ -155,7 +195,7 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
             size="small" style={{ width: 130 }} value={model}
             options={MODEL_OPTIONS} onChange={changeModel} title="응답 모델"
           />
-          <Tooltip title="대화 지우기">
+          <Tooltip title="대화 초기화 (AI 기억 포함)">
             <Button size="small" type="text" icon={<ClearOutlined />} onClick={clearHistory} />
           </Tooltip>
         </Space>
@@ -164,9 +204,20 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <div style={{ flex: 1, overflow: 'auto', paddingBottom: 12 }}>
           {items.length === 0 && (
-            <Typography.Paragraph type="secondary">
-              예: "배포 현황 대시보드 만들고 argocd 앱 목록 테이블 넣어줘"
-            </Typography.Paragraph>
+            <>
+              <Typography.Paragraph type="secondary">이렇게 시작해보세요:</Typography.Paragraph>
+              <Space direction="vertical" size={6} style={{ width: '100%' }}>
+                {SUGGESTIONS.map((s) => (
+                  <Button
+                    key={s} size="small" block
+                    style={{ whiteSpace: 'normal', height: 'auto', textAlign: 'left' }}
+                    onClick={() => setInput(s)}
+                  >
+                    {s}
+                  </Button>
+                ))}
+              </Space>
+            </>
           )}
           {items.map((item, i) => {
             switch (item.kind) {
@@ -178,11 +229,14 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
                 );
               case 'assistant':
                 return (
-                  <div key={i}>
+                  <div key={i} className="chat-msg">
                     <span
                       className="chat-bubble chat-assistant"
                       dangerouslySetInnerHTML={{ __html: renderMarkdown(item.text) }}
                     />
+                    <Tooltip title="답변 복사">
+                      <CopyOutlined className="chat-copy" onClick={() => copyText(item.text)} />
+                    </Tooltip>
                   </div>
                 );
               case 'tool':
@@ -230,7 +284,17 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
                   />
                 );
               case 'error':
-                return <Alert key={i} type="error" message={item.text} style={{ marginBottom: 8 }} />;
+                return (
+                  <Alert
+                    key={i} type="error" message={item.text} style={{ marginBottom: 8 }}
+                    // 마지막 메시지가 에러일 때만 재시도 제공 (옛 에러에 붙으면 혼란)
+                    action={i === items.length - 1 && !busy ? (
+                      <Button size="small" icon={<RedoOutlined />} onClick={retryLast}>
+                        다시 시도
+                      </Button>
+                    ) : undefined}
+                  />
+                );
             }
           })}
           {busy && stage && (
@@ -242,10 +306,20 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
         </div>
         <Space.Compact style={{ width: '100%' }}>
           <Input.TextArea
-            placeholder={busy ? 'AI 작업 중…' : '말로 대시보드를 만들어보세요 (Shift+Enter 줄바꿈)'}
+            placeholder={busy ? 'AI 작업 중…' : '말로 대시보드를 만들어보세요 (Shift+Enter 줄바꿈, ↑ 이전 입력)'}
             value={input} disabled={busy}
             autoSize={{ minRows: 1, maxRows: 5 }}
             onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              // 입력이 비어 있을 때 ↑ 로 마지막 보낸 메시지를 다시 불러온다
+              if (e.key === 'ArrowUp' && input === '') {
+                const lastUser = [...items].reverse().find((it) => it.kind === 'user');
+                if (lastUser && lastUser.kind === 'user') {
+                  e.preventDefault();
+                  setInput(lastUser.text);
+                }
+              }
+            }}
             onPressEnter={(e) => {
               if (!e.shiftKey) {
                 e.preventDefault();
@@ -253,7 +327,13 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
               }
             }}
           />
-          <Button type="primary" icon={<SendOutlined />} loading={busy} onClick={() => void send()} />
+          {busy ? (
+            <Tooltip title="응답 중단">
+              <Button danger icon={<StopOutlined />} onClick={stop} />
+            </Tooltip>
+          ) : (
+            <Button type="primary" icon={<SendOutlined />} onClick={() => void send()} />
+          )}
         </Space.Compact>
       </div>
     </Drawer>

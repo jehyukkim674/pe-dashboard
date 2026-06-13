@@ -22,6 +22,11 @@ export class ChatService implements ChatAdapter {
 
   constructor(private readonly deps: Deps) {}
 
+  // 대화 초기화: 세션 메시지 히스토리를 삭제한다
+  clearSession(sessionId: string): void {
+    this.sessions.delete(sessionId);
+  }
+
   async chat(sessionId: string, userMessage: string, emit: (e: ChatEvent) => void): Promise<void> {
     const history = this.sessions.get(sessionId) ?? [];
     this.sessions.set(sessionId, history);

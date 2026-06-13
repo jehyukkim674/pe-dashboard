@@ -108,6 +108,11 @@ export class ClaudeCliAdapter implements ChatAdapter {
     this.remember(sessionId, userMessage, parsed.reply ?? '');
   }
 
+  // 대화 초기화: 프롬프트에 들어가는 요약 히스토리를 비워 AI가 이전 대화를 기억하지 않게 한다
+  clearSession(sessionId: string): void {
+    this.history.delete(sessionId);
+  }
+
   private remember(sessionId: string, user: string, reply: string): void {
     const turns = this.history.get(sessionId) ?? [];
     turns.push({ user, reply });
