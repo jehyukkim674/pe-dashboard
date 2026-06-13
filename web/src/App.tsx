@@ -27,7 +27,17 @@ export default function App() {
   const [tvRotate, setTvRotate] = useState(() => localStorage.getItem('pe-tv-rotate') === '1');
   const [logOpen, setLogOpen] = useState(false);
   const [dashSearch, setDashSearch] = useState('');
+  const [chatPrompt, setChatPrompt] = useState<string>();
   const { paused } = usePollControl();
+
+  // 'AI 분석' — 채팅을 열고 현재 대시보드 진단 프롬프트를 자동 전송한다 (화면 컨텍스트가 근거)
+  const analyzeDashboard = () => {
+    setChatPrompt(
+      '지금 보고 있는 대시보드의 상태를 한눈에 요약하고, 비정상·실패·이상 징후가 있으면 진단해줘. ' +
+      '변경은 하지 말고 분석만. 정상이면 정상이라고 알려줘.',
+    );
+    setChatOpen(true);
+  };
   const [siderWidth, setSiderWidth] = useState(() => {
     const saved = Number(localStorage.getItem('pe-sider-width'));
     return saved >= 160 && saved <= 420 ? saved : 220;
@@ -311,7 +321,7 @@ export default function App() {
         style={{ padding: 16, background: dark ? '#101010' : '#f5f5f5' }}
       >
         {selected ? (
-          <DashboardGrid dashboard={selected} onChanged={() => refresh()} />
+          <DashboardGrid dashboard={selected} onChanged={() => refresh()} onAnalyze={analyzeDashboard} />
         ) : (
           <Empty
             description="대시보드가 없습니다"
@@ -349,6 +359,7 @@ export default function App() {
       <ChatDrawer
         open={chatOpen} onClose={() => setChatOpen(false)}
         onDashboardsChanged={refresh} dashboardId={selectedId}
+        injectedPrompt={chatPrompt} onInjectedConsumed={() => setChatPrompt(undefined)}
       />
       <UpdateModal manualCheckCount={updateCheckCount} />
       {logOpen && <CommandLogModal onClose={() => setLogOpen(false)} />}

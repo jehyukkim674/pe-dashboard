@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Button, message } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import RGL, { WidthProvider } from 'react-grid-layout/legacy';
 import { api } from '../api';
 import type { Dashboard, Widget, WidgetType } from '../types';
@@ -27,9 +27,10 @@ type RglItem = { i: string; x: number; y: number; w: number; h: number };
 interface Props {
   dashboard: Dashboard;
   onChanged: () => void;
+  onAnalyze?: () => void; // 'AI 분석' — 채팅으로 현재 대시보드 진단 요청
 }
 
-export default function DashboardGrid({ dashboard, onChanged }: Props) {
+export default function DashboardGrid({ dashboard, onChanged, onAnalyze }: Props) {
   const [adding, setAdding] = useState(false);
   const [highlightId, setHighlightId] = useState<string>();
 
@@ -149,6 +150,14 @@ export default function DashboardGrid({ dashboard, onChanged }: Props) {
   return (
     <>
       <div className="dash-toolbar" style={{ marginBottom: 4, textAlign: 'right' }}>
+        {onAnalyze && dashboard.widgets.length > 0 && (
+          <Button
+            size="small" type="text" icon={<ThunderboltOutlined />}
+            onClick={onAnalyze} style={{ marginRight: 4 }}
+          >
+            AI 분석
+          </Button>
+        )}
         <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => setAdding(true)}>
           위젯 추가
         </Button>

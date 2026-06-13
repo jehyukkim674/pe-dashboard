@@ -19,6 +19,8 @@ interface Props {
   onClose: () => void;
   onDashboardsChanged: () => void;
   dashboardId?: string; // 현재 화면에 보이는 대시보드 — AI 응답의 데이터 근거
+  injectedPrompt?: string; // 외부(예: 'AI 분석' 버튼)에서 주입한 프롬프트 — 열리면 자동 전송
+  onInjectedConsumed?: () => void; // 주입 프롬프트를 보낸 뒤 부모가 비우도록 알림
 }
 
 type Item =
@@ -68,7 +70,9 @@ const MODEL_OPTIONS = [
   { value: 'opus', label: 'opus (정밀)' },
 ];
 
-export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboardId }: Props) {
+export default function ChatDrawer({
+  open, onClose, onDashboardsChanged, dashboardId, injectedPrompt, onInjectedConsumed,
+}: Props) {
   const [sessionId, setSessionId] = useState(loadSessionId);
   const [items, setItems] = useState<Item[]>(loadHistory);
   const [input, setInput] = useState('');
@@ -163,6 +167,16 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
       setStage(undefined);
     }
   };
+
+  // 외부에서 주입된 프롬프트('AI 분석' 등)를 한 번 자동 전송한다 (중복 전송 방지)
+  const injectedRef = useRef<string>(undefined);
+  useEffect(() => {
+    if (!injectedPrompt || busy || injectedRef.current === injectedPrompt) return;
+    injectedRef.current = injectedPrompt;
+    void send(injectedPrompt);
+    onInjectedConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [injectedPrompt, busy]);
 
   // 마지막 사용자 메시지를 다시 보낸다 (에러 후 재시도)
   const retryLast = () => {
