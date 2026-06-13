@@ -9,6 +9,7 @@ import { ResultCache } from '../commands/resultCache.js';
 import type { ToolKit } from './tools.js';
 import type { ChatAdapter, ChatContext, ChatEvent } from './adapter.js';
 import { applyOperations, type Operation } from './operations.js';
+import type { ExecStream } from './claudeStream.js';
 
 const CLI_TIMEOUT_MS = 120_000;
 const MAX_HISTORY_TURNS = 10;
@@ -38,6 +39,7 @@ interface Deps {
   pgProfiles?: PgProfiles; // Postgres 위젯 생성 안내용 (프로필 이름만 노출)
   dataSources?: DataSourceRegistry; // http/postgres 위젯의 화면 데이터 조회용 (cli는 exec로 직접)
   exec?: Exec; // 테스트 주입용. 기본 runArgv
+  execStream?: ExecStream; // 주입 시 stream-json으로 응답을 토큰 단위 스트리밍 (표시 전용)
   readOnly?: boolean; // 조회 전용 모드: AI의 변경 작업(operations)을 적용하지 않는다
   cache?: ResultCache; // 위젯 데이터 캐시. CliSource와 공유하면 화면 컨텍스트가 재실행을 피한다
 }
@@ -71,11 +73,38 @@ export class ClaudeCliAdapter implements ChatAdapter {
     emit({ type: 'status', stage: 'AI 응답 생성 중…' });
     const modelFlags =
       context?.model && ALLOWED_MODELS.has(context.model) ? ['--model', context.model] : [];
-    const result = await this.exec(
-      ['claude', '-p', prompt, '--output-format', 'json', ...READONLY_CLI_FLAGS, ...modelFlags],
-      CLI_TIMEOUT_MS,
-      context?.signal, // 클라이언트가 끊으면 claude 프로세스도 종료
-    );
+
+    // execStream이 주입되면 stream-json으로 응답 텍스트를 토큰 단위로 흘려 보여준다(표시 전용).
+    // operations 적용은 아래에서 최종 완성 텍스트를 extractJson으로 권위 있게 파싱하므로 영향 없음.
+    let result: CommandResult;
+    if (this.deps.execStream) {
+      let modelText = '';
+      let emitted = 0;
+      result = await this.deps.execStream(
+        ['claude', '-p', prompt, '--output-format', 'stream-json', '--verbose',
+          '--include-partial-messages', ...READONLY_CLI_FLAGS, ...modelFlags],
+        (evt) => {
+          const delta = evt.event?.type === 'content_block_delta' && evt.event.delta?.type === 'text_delta'
+            ? evt.event.delta.text
+            : undefined;
+          if (typeof delta !== 'string') return;
+          modelText += delta;
+          const reply = extractReplyText(modelText);
+          if (reply.length > emitted) {
+            emit({ type: 'text_delta', text: reply.slice(emitted) });
+            emitted = reply.length;
+          }
+        },
+        CLI_TIMEOUT_MS,
+        context?.signal,
+      );
+    } else {
+      result = await this.exec(
+        ['claude', '-p', prompt, '--output-format', 'json', ...READONLY_CLI_FLAGS, ...modelFlags],
+        CLI_TIMEOUT_MS,
+        context?.signal, // 클라이언트가 끊으면 claude 프로세스도 종료
+      );
+    }
     if (context?.signal?.aborted) return; // 받을 사람이 없으니 조용히 종료
 
     if (!result.ok) {
@@ -240,6 +269,38 @@ export class ClaudeCliAdapter implements ChatAdapter {
     if (!this.deps.dataSources) return undefined;
     return this.deps.dataSources.get(ds.kind).fetch(ds);
   }
+}
+
+// 스트리밍 중인 모델 출력(완성 전 JSON 문자열)에서 지금까지의 reply 값만 언이스케이프해 뽑는다.
+// 표시 전용 — operations는 최종 완성 텍스트를 extractJson으로 파싱해 적용하므로 여기 정확성은 무관.
+export function extractReplyText(partial: string): string {
+  const s = partial.replace(/^\s*```(?:json)?\s*/i, '');
+  const m = /"reply"\s*:\s*"/.exec(s);
+  if (!m) return '';
+  let out = '';
+  for (let i = m.index + m[0].length; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '"') break; // reply 문자열의 끝
+    if (ch !== '\\') {
+      out += ch;
+      continue;
+    }
+    if (i + 1 >= s.length) break; // 백슬래시가 마지막 — 미완성 이스케이프, 다음 청크를 기다린다
+    const next = s[i + 1];
+    const simple: Record<string, string> = {
+      n: '\n', t: '\t', r: '\r', '"': '"', '\\': '\\', '/': '/', b: '\b', f: '\f',
+    };
+    if (next === 'u') {
+      const hex = s.slice(i + 2, i + 6);
+      if (hex.length < 4) break; // 미완성 \uXXXX
+      out += /^[0-9a-fA-F]{4}$/.test(hex) ? String.fromCharCode(parseInt(hex, 16)) : next;
+      i += /^[0-9a-fA-F]{4}$/.test(hex) ? 5 : 1;
+    } else {
+      out += simple[next] ?? next;
+      i += 1;
+    }
+  }
+  return out;
 }
 
 // 코드펜스(```json ... ```)나 앞뒤 잡설이 섞여 있어도 JSON 객체를 찾아 파싱한다.

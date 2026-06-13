@@ -23,7 +23,7 @@ interface Props {
 
 type Item =
   | { kind: 'user'; text: string }
-  | { kind: 'assistant'; text: string }
+  | { kind: 'assistant'; text: string; streaming?: boolean }
   | { kind: 'tool'; summary: string }
   | { kind: 'confirm'; pendingId: string; command: CommandTemplate; warning?: string; resolved?: 'ok' | 'no' }
   | { kind: 'error'; text: string };
@@ -87,9 +87,10 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
     setItems((prev) => [...prev, item]);
   };
 
+  // items 내용이 바뀔 때마다(스트리밍 증분 포함) 하단으로 따라간다
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [items.length]);
+  }, [items]);
 
   useEffect(() => {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(-HISTORY_MAX)));
@@ -122,9 +123,27 @@ export default function ChatDrawer({ open, onClose, onDashboardsChanged, dashboa
     try {
       await streamChat(sessionId, text, (e: ChatEvent) => {
         if (e.type === 'status') setStage(e.stage);
-        if (e.type === 'text') {
+        if (e.type === 'text_delta') {
+          // 스트리밍 조각: 진행 중인 assistant 버블에 이어 붙이고, 없으면 새로 만든다
           setStage(undefined);
-          push({ kind: 'assistant', text: e.text });
+          setItems((prev) => {
+            const last = prev[prev.length - 1];
+            if (last?.kind === 'assistant' && last.streaming) {
+              return [...prev.slice(0, -1), { ...last, text: last.text + e.text }];
+            }
+            return [...prev, { kind: 'assistant', text: e.text, streaming: true }];
+          });
+        }
+        if (e.type === 'text') {
+          // 최종 권위 응답: 진행 중 버블이 있으면 그 내용을 교체하며 스트리밍 종료, 없으면 새 버블
+          setStage(undefined);
+          setItems((prev) => {
+            const last = prev[prev.length - 1];
+            if (last?.kind === 'assistant' && last.streaming) {
+              return [...prev.slice(0, -1), { kind: 'assistant', text: e.text }];
+            }
+            return [...prev, { kind: 'assistant', text: e.text }];
+          });
         }
         if (e.type === 'tool') {
           push({ kind: 'tool', summary: e.summary });

@@ -53,6 +53,7 @@ export interface CommandResult {
 // ChatEvent는 server/src/ai/chatService.ts 기준 ('done' 이벤트는 chat.ts 라우트가 추가)
 export type ChatEvent =
   | { type: 'text'; text: string }
+  | { type: 'text_delta'; text: string }
   | { type: 'status'; stage: string }
   | { type: 'tool'; name: string; summary: string }
   | { type: 'confirm_request'; pendingId: string; command: CommandTemplate; warning?: string }

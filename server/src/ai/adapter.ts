@@ -1,7 +1,8 @@
 import type { CommandTemplate } from '../types.js';
 
 export type ChatEvent =
-  | { type: 'text'; text: string }
+  | { type: 'text'; text: string } // 최종(권위) 응답 — 스트리밍 시 누적 버블을 이 값으로 교체
+  | { type: 'text_delta'; text: string } // 스트리밍 표시용 증분 텍스트 조각
   | { type: 'status'; stage: string } // 진행 단계 안내 (다음 이벤트가 오면 대체)
   | { type: 'tool'; name: string; summary: string }
   | { type: 'confirm_request'; pendingId: string; command: CommandTemplate; warning?: string }

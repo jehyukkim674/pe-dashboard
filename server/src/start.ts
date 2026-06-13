@@ -20,6 +20,7 @@ import { PostgresSource } from './datasources/postgresSource.js';
 import { buildTools } from './ai/tools.js';
 import { ChatService } from './ai/chatService.js';
 import { ClaudeCliAdapter } from './ai/claudeCliAdapter.js';
+import { runClaudeStream } from './ai/claudeStream.js';
 import type { ChatAdapter } from './ai/adapter.js';
 
 export interface StartOptions {
@@ -67,7 +68,7 @@ export async function startServer(
       ? new ChatService({ client: new Anthropic(), tools, store, commands })
       : new ClaudeCliAdapter({
           store, commands, pending, pgProfiles, dataSources, toolkit: tools,
-          readOnly: aiReadOnly, cache: commandCache,
+          readOnly: aiReadOnly, cache: commandCache, execStream: runClaudeStream,
         });
 
   const app = await buildApp({ store, commands, pending, dataSources, chatService, tools, pgProfiles, httpProfiles });

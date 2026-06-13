@@ -6,8 +6,9 @@ import { DashboardStore } from '../src/dashboardStore.js';
 import { CommandRegistry } from '../src/commands/registry.js';
 import { PendingCommands } from '../src/commands/pending.js';
 import { buildTools } from '../src/ai/tools.js';
-import { ClaudeCliAdapter, extractJson } from '../src/ai/claudeCliAdapter.js';
+import { ClaudeCliAdapter, extractJson, extractReplyText } from '../src/ai/claudeCliAdapter.js';
 import type { ChatEvent } from '../src/ai/adapter.js';
+import type { ExecStream } from '../src/ai/claudeStream.js';
 import type { DataSourceRegistry } from '../src/datasources/registry.js';
 import type { CommandResult } from '../src/types.js';
 
@@ -23,7 +24,7 @@ function envelope(text: string): CommandResult {
 
 async function makeAdapter(
   results: CommandResult[],
-  opts: { readOnly?: boolean; dataSources?: DataSourceRegistry } = {},
+  opts: { readOnly?: boolean; dataSources?: DataSourceRegistry; execStream?: ExecStream } = {},
 ) {
   const dir = await mkdtemp(path.join(tmpdir(), 'cli-'));
   const store = new DashboardStore(path.join(dir, 'dashboards'));
@@ -39,7 +40,8 @@ async function makeAdapter(
   };
   return {
     adapter: new ClaudeCliAdapter({
-      store, commands, pending, toolkit, exec, readOnly: opts.readOnly, dataSources: opts.dataSources,
+      store, commands, pending, toolkit, exec, readOnly: opts.readOnly,
+      dataSources: opts.dataSources, execStream: opts.execStream,
     }),
     store,
     pending,
@@ -361,5 +363,63 @@ describe('ClaudeCliAdapter', () => {
     const secondPrompt = calls[1][calls[1].indexOf('-p') + 1];
     expect(secondPrompt).not.toContain('첫 질문');
     expect(secondPrompt).not.toContain('첫 답');
+  });
+
+  describe('스트리밍', () => {
+    it('streams reply text as text_delta and finalizes with text + operations', async () => {
+      // 모델 출력 JSON을 조각내어 델타로 흘린다
+      const chunks = ['{"reply":"안', '녕하', '세요","operations":[]}'];
+      let streamArgv: string[] = [];
+      const execStream: ExecStream = async (argv, onEvent) => {
+        streamArgv = argv;
+        for (const c of chunks) {
+          onEvent({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: c } } });
+        }
+        return envelope('{"reply":"안녕하세요","operations":[]}');
+      };
+      const { adapter } = await makeAdapter([], { execStream });
+      const { events, emit } = collect();
+      await adapter.chat('s1', '인사해줘', emit);
+
+      // stream-json 플래그로 호출됐는지
+      expect(streamArgv).toContain('stream-json');
+      // 델타 조각을 모으면 reply 본문이 된다 (JSON 구문은 안 보이고 텍스트만)
+      const deltas = events.filter((e) => e.type === 'text_delta').map((e) => (e as { text: string }).text);
+      expect(deltas.join('')).toBe('안녕하세요');
+      // 최종 권위 텍스트 1회
+      expect(events.filter((e) => e.type === 'text')).toEqual([{ type: 'text', text: '안녕하세요' }]);
+    });
+
+    it('applies operations from the final parse even while streaming', async () => {
+      const execStream: ExecStream = async () =>
+        envelope('{"reply":"만들었어요","operations":[{"op":"create_dashboard","name":"새 대시"}]}');
+      const { adapter, store } = await makeAdapter([], { execStream });
+      const { emit } = collect();
+      await adapter.chat('s1', '대시보드 만들어', emit);
+      const list = await store.list();
+      expect(list.some((d) => d.name === '새 대시')).toBe(true);
+    });
+  });
+});
+
+describe('extractReplyText (스트리밍 진행형 추출)', () => {
+  it('returns empty until the reply field begins', () => {
+    expect(extractReplyText('{"repl')).toBe('');
+    expect(extractReplyText('{"reply":')).toBe('');
+    expect(extractReplyText('{"reply":"')).toBe('');
+  });
+  it('returns the partial reply as it grows', () => {
+    expect(extractReplyText('{"reply":"안녕')).toBe('안녕');
+    expect(extractReplyText('{"reply":"안녕하세요","operations')).toBe('안녕하세요');
+  });
+  it('unescapes common sequences', () => {
+    expect(extractReplyText('{"reply":"a\\nb\\"c"')).toBe('a\nb"c');
+  });
+  it('stops before a dangling escape (incomplete chunk)', () => {
+    expect(extractReplyText('{"reply":"line\\')).toBe('line');
+    expect(extractReplyText('{"reply":"x\\u26')).toBe('x');
+  });
+  it('handles a leading json code fence', () => {
+    expect(extractReplyText('```json\n{"reply":"hi","operations":[]}')).toBe('hi');
   });
 });
