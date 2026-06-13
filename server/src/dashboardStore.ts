@@ -73,7 +73,11 @@ export class DashboardStore {
     const dashboard = await this.mustGet(dashboardId);
     const index = dashboard.widgets.findIndex((w) => w.id === widgetId);
     if (index < 0) throw new Error(`widget not found: ${widgetId}`);
-    dashboard.widgets[index] = { ...dashboard.widgets[index], ...patch, id: widgetId };
+    const current = dashboard.widgets[index];
+    const display = mergeTablePrefs(current, patch);
+    dashboard.widgets[index] = {
+      ...current, ...patch, ...(display && { display }), id: widgetId,
+    };
     await this.write(dashboard);
     return dashboard.widgets[index];
   }
@@ -99,4 +103,21 @@ export class DashboardStore {
     await fs.writeFile(tmp, JSON.stringify(dashboard, null, 2));
     await fs.rename(tmp, target);
   }
+}
+
+// 테이블 위젯의 사용자 개인화 설정 키 (web/src/components/widgets/tableFormat.ts와 동일 목록).
+// AI의 update_widget이 display를 패치할 때 명시하지 않은 개인화 설정이 날아가지 않게 보존한다.
+const TABLE_PREF_KEYS = ['columnWidths', 'columnFilters', 'columnSort', 'hiddenColumns', 'columnOrder'];
+
+function mergeTablePrefs(
+  current: Widget,
+  patch: Partial<Omit<Widget, 'id'>>,
+): Record<string, unknown> | undefined {
+  if (!patch.display || !current.display) return patch.display;
+  if ((patch.type ?? current.type) !== 'table') return patch.display;
+  const merged = { ...patch.display };
+  for (const key of TABLE_PREF_KEYS) {
+    if (!(key in merged) && key in current.display) merged[key] = current.display[key];
+  }
+  return merged;
 }

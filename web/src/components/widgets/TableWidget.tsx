@@ -136,16 +136,20 @@ export default function TableWidget({ result, display, onDisplayChange }: {
   const matchesFilter = (row: Record<string, unknown>, key: string, value: unknown) =>
     cellText(valueAt(row, key)) === value;
 
-  // 카운터용: antd 내부 필터와 같은 조건으로 화면에 실제 보이는 행 수를 계산
-  const displayedCount = searchedRows.filter((row) =>
-    Object.entries(prefs.filters).every(([key, values]) => values.some((v) => matchesFilter(row, key, v))),
-  ).length;
-
   const filterOptions = (key: string) => {
     const values = [...new Set(rows.map((row) => cellText(valueAt(row, key))))].sort();
     if (values.length < 2 || values.length > MAX_FILTER_OPTIONS) return undefined;
     return values.map((v) => ({ text: v === '' ? '(빈 값)' : v, value: v }));
   };
+  const filterOptionsByKey = new Map(columns.map((key) => [key, filterOptions(key)] as const));
+
+  // 카운터용: 실제 테이블에 적용되는 필터만 계산한다.
+  // 숨겨진 컬럼이나 필터 옵션이 사라진 컬럼의 저장 필터는 antd도 무시하므로 똑같이 제외.
+  const activeFilters = Object.entries(prefs.filters)
+    .filter(([key]) => filterOptionsByKey.get(key) != null);
+  const displayedCount = searchedRows.filter((row) =>
+    activeFilters.every(([key, values]) => values.some((v) => matchesFilter(row, key, v))),
+  ).length;
 
   // 필터·정렬 변경을 display에 저장해 다시 열어도 유지한다
   const handleTableChange: TableProps<Record<string, unknown>>['onChange'] = (_p, filters, sorter) => {
@@ -246,9 +250,16 @@ export default function TableWidget({ result, display, onDisplayChange }: {
         scroll={totalWidth != null ? { x: totalWidth } : undefined}
         components={{ header: { cell: ResizableTh } }}
         onChange={handleTableChange}
-        onRow={(row) => ({ onClick: () => setDetailRow(row), style: { cursor: 'pointer' } })}
+        onRow={(row) => ({
+          onClick: () => {
+            // 셀 텍스트를 드래그로 선택한 경우는 클릭으로 치지 않는다
+            if (window.getSelection()?.toString()) return;
+            setDetailRow(row);
+          },
+          style: { cursor: 'pointer' },
+        })}
         columns={columns.map((key) => {
-          const filters = filterOptions(key);
+          const filters = filterOptionsByKey.get(key);
           return {
             // antd v4+는 'a.b' 문자열로 중첩 필드를 찾지 않으므로 배열 경로로 변환
             title: key, dataIndex: key.split('.'), key,

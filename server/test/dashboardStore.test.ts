@@ -59,6 +59,33 @@ describe('DashboardStore', () => {
     expect((await store.get(d.id))!.widgets).toEqual([]);
   });
 
+  it('updateWidget keeps table user prefs when display is patched without them', async () => {
+    const d = await store.create('표');
+    const widget = await store.addWidget(d.id, {
+      type: 'table',
+      title: '목록',
+      layout: { x: 0, y: 0, w: 6, h: 5 },
+      display: { columns: ['name'], columnWidths: { name: 200 }, columnSort: { key: 'name', order: 'ascend' } },
+    });
+
+    // AI가 columns만 바꾸는 패치를 보내도 사용자의 폭·정렬 설정은 유지돼야 한다
+    const updated = await store.updateWidget(d.id, widget.id, {
+      display: { columns: ['name', 'status'] },
+    });
+    expect(updated.display).toEqual({
+      columns: ['name', 'status'],
+      columnWidths: { name: 200 },
+      columnSort: { key: 'name', order: 'ascend' },
+    });
+
+    // 명시적으로 보내면 패치 값이 이긴다
+    const overridden = await store.updateWidget(d.id, widget.id, {
+      display: { columns: ['name'], columnWidths: { name: 90 } },
+    });
+    expect(overridden.display!.columnWidths).toEqual({ name: 90 });
+    expect(overridden.display!.columnSort).toEqual({ key: 'name', order: 'ascend' });
+  });
+
   it('throws when widget target is missing', async () => {
     const d = await store.create('x');
     await expect(store.updateWidget(d.id, 'nope', {})).rejects.toThrow(/widget not found/);

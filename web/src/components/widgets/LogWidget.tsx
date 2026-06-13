@@ -58,7 +58,11 @@ export default function LogWidget({ result }: { result?: CommandResult }) {
         <Tooltip title="맨 아래 고정">
           <Button
             size="small" type={follow ? 'primary' : 'text'} icon={<VerticalAlignBottomOutlined />}
-            onClick={() => setFollow((f) => !f)}
+            onClick={() => {
+              // 끔→켬으로 바꾸는 순간 즉시 하단으로 이동
+              if (!follow && ref.current) ref.current.scrollTop = ref.current.scrollHeight;
+              setFollow((f) => !f);
+            }}
             style={{ marginLeft: 'auto' }}
           />
         </Tooltip>
@@ -71,9 +75,10 @@ export default function LogWidget({ result }: { result?: CommandResult }) {
           background: '#1e1e1e', color: '#d4d4d4', padding: '8px 10px', borderRadius: 6,
         }}
       >
-        {matched.map((line, i) => (
-          <div key={i}>{highlight(line, q)}</div>
-        ))}
+        {/* 검색 중이 아니면 통짜 텍스트로 렌더 — 대용량 로그에서 줄별 div 비용을 피한다 */}
+        {q === ''
+          ? text
+          : matched.map((line, i) => <div key={i}>{highlight(line, q)}</div>)}
       </pre>
     </div>
   );

@@ -65,6 +65,18 @@ describe('TableWidget', () => {
     expect(screen.queryByText('api-server')).toBeNull();
   });
 
+  it('ignores saved filters for hidden columns (counter matches table)', () => {
+    render(
+      <TableWidget
+        result={result}
+        display={{ columnFilters: { status: ['Synced'] }, hiddenColumns: ['status'] }}
+      />,
+    );
+    // status 컬럼이 숨겨지면 antd가 필터를 적용하지 않으므로 전체 행이 보이고 카운터도 없어야 한다
+    expect(screen.getByText('api-server')).toBeTruthy();
+    expect(screen.queryByText(/건 표시/)).toBeNull();
+  });
+
   it('opens row detail modal on row click', () => {
     render(<TableWidget result={result} />);
     fireEvent.click(screen.getByText('api-server'));
