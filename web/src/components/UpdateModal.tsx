@@ -67,7 +67,14 @@ export default function UpdateModal({ manualCheckCount }: Props) {
   };
 
   const restart = () => void window.appUpdater?.restart();
+  const openReleasePage = () => {
+    void window.appUpdater?.openReleasePage();
+    setUpdate(undefined);
+  };
 
+  // 서명 안 된 빌드(canAutoInstall=false)는 자동 설치가 불가하므로 다운로드 시도 자체를 막고
+  // GitHub 릴리스 페이지로 안내한다 (자동 적용이 조용히 실패하는 '먹통' 방지).
+  const canAuto = update?.canAutoInstall !== false;
   const downloading = percent !== undefined && percent < 100;
   const downloaded = percent === 100;
   return (
@@ -78,7 +85,11 @@ export default function UpdateModal({ manualCheckCount }: Props) {
       closable={!downloading}
       mask={{ closable: false }}
       footer={
-        downloading ? null
+        !canAuto ? [
+          <Button key="later" onClick={() => setUpdate(undefined)}>나중에</Button>,
+          <Button key="dl" type="primary" onClick={openReleasePage}>GitHub에서 받기</Button>,
+        ]
+        : downloading ? null
           : downloaded ? [
               <Button key="later" onClick={() => setUpdate(undefined)}>나중에 재시작</Button>,
               <Button key="restart" type="primary" onClick={restart}>지금 재시작</Button>,
@@ -96,10 +107,16 @@ export default function UpdateModal({ manualCheckCount }: Props) {
           <div dangerouslySetInnerHTML={{ __html: sanitizeNotes(update.notes) }} />
         </Typography>
       )}
-      {percent !== undefined && (
+      {!canAuto && (
+        <Typography.Text type="warning" style={{ fontSize: 12 }}>
+          이 빌드는 코드 서명이 없어 앱 안에서 자동 설치가 안 됩니다. ‘GitHub에서 받기’로 새 zip을 받아
+          ~/Applications의 앱을 교체해주세요.
+        </Typography.Text>
+      )}
+      {canAuto && percent !== undefined && (
         <Progress percent={percent} status={percent < 100 ? 'active' : 'success'} />
       )}
-      {downloaded && (
+      {canAuto && downloaded && (
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           다운로드 완료 — 지금 재시작하면 새 버전으로 전환됩니다. 나중에 앱을 종료해도 자동 적용됩니다.
         </Typography.Text>

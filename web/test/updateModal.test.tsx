@@ -10,9 +10,11 @@ function mockUpdater(over: Partial<Record<string, unknown>> = {}) {
   const updater = {
     check: vi.fn().mockResolvedValue({
       kind: 'available', currentVersion: '0.17.0', version: '0.18.0', notes: '<p>새 기능</p>',
+      canAutoInstall: true,
     }),
     install: vi.fn().mockResolvedValue(undefined),
     restart: vi.fn(),
+    openReleasePage: vi.fn().mockResolvedValue(undefined),
     onProgress: vi.fn().mockReturnValue(() => {}),
     ...over,
   };
@@ -36,6 +38,24 @@ describe('UpdateModal restart flow', () => {
 
     fireEvent.click(restartBtn);
     expect(updater.restart).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers manual download (not auto-install) for unsigned builds', async () => {
+    const updater = mockUpdater({
+      check: vi.fn().mockResolvedValue({
+        kind: 'available', currentVersion: '0.20.0', version: '0.21.0', notes: '<p>fix</p>',
+        canAutoInstall: false,
+      }),
+    });
+    render(<UpdateModal manualCheckCount={1} />);
+
+    // 서명 안 된 빌드: '업데이트'(다운로드) 대신 'GitHub에서 받기'가 뜨고 자동 설치는 시도하지 않는다
+    const dl = await screen.findByText('GitHub에서 받기');
+    expect(screen.queryByText('업데이트')).toBeNull();
+    expect(screen.getByText(/코드 서명이 없어/)).toBeTruthy();
+    fireEvent.click(dl);
+    expect(updater.openReleasePage).toHaveBeenCalledTimes(1);
+    expect(updater.install).not.toHaveBeenCalled();
   });
 
   it('surfaces an error and hides progress if install fails', async () => {

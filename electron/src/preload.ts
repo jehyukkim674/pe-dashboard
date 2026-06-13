@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('appUpdater', {
   check: () => ipcRenderer.invoke('updater:check'),
   install: () => ipcRenderer.invoke('updater:install'),
   restart: () => ipcRenderer.invoke('updater:restart'),
+  openReleasePage: () => ipcRenderer.invoke('updater:openRelease'),
   onProgress: (cb: (percent: number) => void) => {
     const listener = (_e: IpcRendererEvent, percent: number) => cb(percent);
     ipcRenderer.on('updater:progress', listener);

@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { startServer } from '../../server/src/start.js';
-import { checkUpdateStatus, restartToUpdate, startInstall } from './updater.js';
+import { checkUpdateStatus, openReleasePage, restartToUpdate, startInstall } from './updater.js';
 import { createSplashWindow } from './splash.js';
 
 // Finder/독에서 실행된 앱은 셸 PATH(.zprofile 등)를 상속받지 못해
@@ -116,6 +116,7 @@ if (!gotLock) {
     ipcMain.handle('updater:check', () => checkUpdateStatus());
     ipcMain.handle('updater:install', () => (win ? startInstall(win) : undefined));
     ipcMain.handle('updater:restart', () => restartToUpdate());
+    ipcMain.handle('updater:openRelease', () => openReleasePage());
     await createWindow();
   }).catch((err: unknown) => {
     dialog.showErrorBox(
