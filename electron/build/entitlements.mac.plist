@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Developer ID 서명 + 공증(notarization)용 entitlements.
+     Hardened Runtime을 켜면 Electron(V8 JIT)이 실행되도록 아래 권한이 필요하다.
+     현재 미서명(adhoc) 빌드에서는 사용되지 않으며, docs/SIGNING.md대로 서명을 켤 때 적용된다. -->
+<plist version="1.0">
+  <dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+  </dict>
+</plist>
