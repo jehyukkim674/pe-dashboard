@@ -13,6 +13,7 @@
     "lint": "eslint .",
     "app:dev": "concurrently -k \"npm run dev -w server\" \"npm run dev -w web\" \"wait-on http://localhost:5173 && npm run dev -w desktop\"",
     "app:build": "npm run build -w web && npm run dist -w desktop",
+    "release": "bash scripts/release.sh",
     "stop": "pkill -f 'pe-dashboard/node_modules/.bin/(tsx|vite)'; pkill -f 'pe-dashboard/node_modules/electron'; exit 0"
   },
   "devDependencies": {

@@ -51,5 +51,8 @@ npm run app:build  # 패키징 (electron/release/)
 
 1. `electron/package.json` 버전 업 → 커밋
 2. `npm run app:build`
-3. `gh release create vX.Y.Z electron/release/PE-Dashboard-X.Y.Z-arm64-mac.zip{,.blockmap} electron/release/latest-mac.yml --title vX.Y.Z --notes "..."`
-4. 설치: `ditto -x -k <zip> ~/Applications/`
+3. `npm run release -- "릴리스 노트(마크다운)"`
+
+`scripts/release.sh`가 푸시 → **작은 에셋(yml·blockmap)으로 먼저 게시** → **zip 분리 업로드** →
+에셋 3종·draft 검증 → `~/Applications` 설치까지 안전하게 처리한다.
+⚠️ `gh release create`에 대용량 zip을 한 번에 몰면 업로드 실패 시 draft로 남는다(v0.17.0 사고). 직접 하지 말고 스크립트를 쓸 것.
