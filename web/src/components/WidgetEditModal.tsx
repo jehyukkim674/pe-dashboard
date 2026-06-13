@@ -276,8 +276,8 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
             <Form.Item label="X축 키" required>
               <Input value={chartXKey} onChange={(e) => setChartXKey(e.target.value)} placeholder="예: date" />
             </Form.Item>
-            <Form.Item label="Y축 키" required>
-              <Input value={chartYKey} onChange={(e) => setChartYKey(e.target.value)} placeholder="예: count" />
+            <Form.Item label="Y축 키 (쉼표로 여러 개 = 멀티 시리즈)" required>
+              <Input value={chartYKey} onChange={(e) => setChartYKey(e.target.value)} placeholder="예: count 또는 success, failure" />
             </Form.Item>
             <Form.Item label="차트 종류">
               <Select
