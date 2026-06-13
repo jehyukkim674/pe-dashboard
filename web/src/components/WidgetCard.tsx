@@ -1,14 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Alert, Card, Modal, Popconfirm, Select, Skeleton, Spin, Tooltip, message } from 'antd';
-import { CopyOutlined, DeleteOutlined, EditOutlined, ExpandOutlined, ReloadOutlined } from '@ant-design/icons';
+import {
+  CopyOutlined, DeleteOutlined, EditOutlined, ExpandOutlined, FullscreenOutlined, ReloadOutlined,
+} from '@ant-design/icons';
 import type { Widget } from '../types';
 import { relativeTime, useNow, useWidgetData } from '../hooks/useWidgetData';
 import WidgetEditModal, { type WidgetDraft } from './WidgetEditModal';
 import StatWidget from './widgets/StatWidget';
 import TableWidget from './widgets/TableWidget';
-import ChartWidget from './widgets/ChartWidget';
 import LogWidget from './widgets/LogWidget';
 import TextWidget from './widgets/TextWidget';
+// recharts는 무겁고 차트 위젯에서만 쓰므로 지연 로드 — 차트가 없으면 번들에서 빠진다
+const ChartWidget = lazy(() => import('./widgets/ChartWidget'));
 import StatusWidget from './widgets/StatusWidget';
 
 // 자동 갱신 주기 선택지. value 0 = 자동 갱신 없음(수동만)
@@ -44,6 +47,7 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, 
   const { result, lastGood, loading, reload, updatedAt, lastGoodAt } = useWidgetData(widget.dataSource);
   const [editOpen, setEditOpen] = useState(false);
   const [rawOpen, setRawOpen] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
   const now = useNow();
 
   // 신선도: 명령이 계속 실패해 직전 정상 데이터를 보여줄 때, 그 데이터가 얼마나 오래됐는지.
@@ -107,7 +111,11 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, 
     switch (widget.type) {
       case 'stat': return <StatWidget result={shown} display={widget.display} widgetId={widget.id} updatedAt={updatedAt} />;
       case 'table': return <TableWidget result={shown} display={widget.display} onDisplayChange={onChangeDisplay} />;
-      case 'chart': return <ChartWidget result={shown} display={widget.display} />;
+      case 'chart': return (
+        <Suspense fallback={<Skeleton active title={false} paragraph={{ rows: 3 }} />}>
+          <ChartWidget result={shown} display={widget.display} />
+        </Suspense>
+      );
       case 'log': return <LogWidget result={shown} />;
       case 'status': return <StatusWidget result={shown} display={widget.display} />;
     }
@@ -144,6 +152,9 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, 
                 <ExpandOutlined onClick={() => setRawOpen(true)} style={{ cursor: 'pointer' }} />
               </Tooltip>
             )}
+            <Tooltip title="전체화면으로 보기">
+              <FullscreenOutlined onClick={() => setFullscreen(true)} style={{ cursor: 'pointer' }} />
+            </Tooltip>
             <Tooltip title="위젯 편집">
               <EditOutlined onClick={() => setEditOpen(true)} style={{ cursor: 'pointer' }} />
             </Tooltip>
@@ -197,6 +208,16 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, 
       </div>
       {editOpen && (
         <WidgetEditModal widget={widget} onClose={() => setEditOpen(false)} onSave={onEdit} />
+      )}
+      {fullscreen && (
+        <Modal
+          title={widget.title} open onCancel={() => setFullscreen(false)}
+          footer={null} width="92vw" centered
+          styles={{ body: { height: '80vh', overflow: 'auto' } }}
+        >
+          {/* 카드와 같은 라이브 데이터를 큰 화면으로 — 넓은 테이블·차트 확인용 */}
+          <div style={{ height: '100%' }}>{body}</div>
+        </Modal>
       )}
       {rawOpen && (
         <Modal

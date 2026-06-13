@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import WidgetCard from '../src/components/WidgetCard';
 import type { Widget } from '../src/types';
 
@@ -26,5 +26,20 @@ describe('WidgetCard', () => {
     // 데이터 소스가 없으니 갱신 주기 select·새로고침은 없어야 한다
     expect(document.querySelector('.ant-select')).toBeNull();
     expect(document.querySelector('.anticon-reload')).toBeNull();
+  });
+
+  it('opens a fullscreen modal showing the widget content', () => {
+    render(
+      <WidgetCard
+        widget={textWidget}
+        onRemove={() => {}}
+        onChangeRefresh={() => {}}
+        onEdit={() => {}}
+      />,
+    );
+    fireEvent.click(document.querySelector('.anticon-fullscreen')!);
+    // 모달이 열리고 위젯 내용이 큰 화면에도 렌더된다 (제목 + 본문이 2곳)
+    expect(document.querySelector('.ant-modal')).toBeTruthy();
+    expect(screen.getAllByText('오늘 배포 19시').length).toBeGreaterThanOrEqual(2);
   });
 });
