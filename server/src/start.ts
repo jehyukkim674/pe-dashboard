@@ -62,7 +62,10 @@ export async function startServer(
   const chatService: ChatAdapter =
     process.env.CHAT_ADAPTER === 'api'
       ? new ChatService({ client: new Anthropic(), tools, store, commands })
-      : new ClaudeCliAdapter({ store, commands, pending, pgProfiles, toolkit: tools, readOnly: aiReadOnly, cache: commandCache });
+      : new ClaudeCliAdapter({
+          store, commands, pending, pgProfiles, dataSources, toolkit: tools,
+          readOnly: aiReadOnly, cache: commandCache,
+        });
 
   const app = await buildApp({ store, commands, pending, dataSources, chatService, tools, pgProfiles });
 

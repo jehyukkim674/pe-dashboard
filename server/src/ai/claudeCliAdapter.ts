@@ -2,6 +2,7 @@ import type { DashboardStore } from '../dashboardStore.js';
 import type { CommandRegistry } from '../commands/registry.js';
 import type { PendingCommands } from '../commands/pending.js';
 import type { PgProfiles } from '../datasources/pgProfiles.js';
+import type { DataSourceRegistry } from '../datasources/registry.js';
 import type { CommandResult, Dashboard } from '../types.js';
 import { runArgv } from '../commands/runner.js';
 import { ResultCache } from '../commands/resultCache.js';
@@ -35,6 +36,7 @@ interface Deps {
   toolkit: ToolKit;
   pending?: PendingCommands; // 같은 응답에서 등록 요청한 명령에 의존하는 작업의 보류용
   pgProfiles?: PgProfiles; // Postgres 위젯 생성 안내용 (프로필 이름만 노출)
+  dataSources?: DataSourceRegistry; // http/postgres 위젯의 화면 데이터 조회용 (cli는 exec로 직접)
   exec?: Exec; // 테스트 주입용. 기본 runArgv
   readOnly?: boolean; // 조회 전용 모드: AI의 변경 작업(operations)을 적용하지 않는다
   cache?: ResultCache; // 위젯 데이터 캐시. CliSource와 공유하면 화면 컨텍스트가 재실행을 피한다
@@ -202,29 +204,41 @@ export class ClaudeCliAdapter implements ChatAdapter {
     ].filter((line) => line !== '').join('\n');
   }
 
-  // 사용자가 보고 있는 대시보드의 위젯 명령을 실제로 실행해 최신 데이터를 모은다.
-  // 위젯이 띄우는 것과 같은 명령을 같은 파라미터로 실행하므로 화면과 같은 데이터가 된다.
+  // 사용자가 보고 있는 대시보드의 위젯 데이터를 실제로 조회해 최신 상태를 모은다.
+  // 위젯이 띄우는 것과 같은 소스(cli/http/postgres)를 같은 파라미터로 실행하므로 화면과 같은 데이터가 된다.
   private async screenContext(dashboard: Dashboard): Promise<string> {
-    const cliWidgets = dashboard.widgets
-      .filter((w) => w.dataSource?.kind === 'cli')
-      .slice(0, MAX_CONTEXT_WIDGETS);
-    if (cliWidgets.length === 0) return '';
+    const widgets = dashboard.widgets.filter((w) => w.dataSource).slice(0, MAX_CONTEXT_WIDGETS);
+    if (widgets.length === 0) return '';
 
     const entries = await Promise.all(
-      cliWidgets.map(async (w) => {
+      widgets.map(async (w) => {
+        const ds = w.dataSource!;
         try {
-          const argv = this.deps.commands.buildArgv(w.dataSource!.commandId, w.dataSource!.params);
-          const result = await this.cache.run(argv, () => this.exec(argv, WIDGET_DATA_TIMEOUT_MS));
-          const body = result.ok
-            ? result.stdout.slice(0, WIDGET_DATA_MAX_CHARS)
+          const result = await this.fetchWidgetData(ds);
+          if (!result) return undefined; // http/postgres인데 소스 미주입(테스트) → 건너뜀
+          const raw = result.ok
+            ? result.stdout || (result.json !== undefined ? JSON.stringify(result.json) : '')
             : `(조회 실패: ${result.error ?? '알 수 없는 오류'})`;
-          return `[위젯 "${w.title}"]\n${body}`;
+          return `[위젯 "${w.title}"]\n${raw.slice(0, WIDGET_DATA_MAX_CHARS)}`;
         } catch (e) {
           return `[위젯 "${w.title}"]\n(실행 불가: ${e instanceof Error ? e.message : String(e)})`;
         }
       }),
     );
-    return `현재 화면 위젯 데이터 (대시보드 "${dashboard.name}"):\n${entries.join('\n')}`;
+    const lines = entries.filter((e): e is string => e !== undefined);
+    if (lines.length === 0) return '';
+    return `현재 화면 위젯 데이터 (대시보드 "${dashboard.name}"):\n${lines.join('\n')}`;
+  }
+
+  // cli는 주입된 exec로 직접(+캐시 공유)하고, http/postgres는 dataSources 레지스트리로 조회한다.
+  private async fetchWidgetData(ds: Dashboard['widgets'][number]['dataSource']): Promise<CommandResult | undefined> {
+    if (!ds) return undefined;
+    if (ds.kind === 'cli') {
+      const argv = this.deps.commands.buildArgv(ds.commandId, ds.params);
+      return this.cache.run(argv, () => this.exec(argv, WIDGET_DATA_TIMEOUT_MS));
+    }
+    if (!this.deps.dataSources) return undefined;
+    return this.deps.dataSources.get(ds.kind).fetch(ds);
   }
 }
 

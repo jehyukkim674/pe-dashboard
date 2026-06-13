@@ -8,6 +8,7 @@ import { PendingCommands } from '../src/commands/pending.js';
 import { buildTools } from '../src/ai/tools.js';
 import { ClaudeCliAdapter, extractJson } from '../src/ai/claudeCliAdapter.js';
 import type { ChatEvent } from '../src/ai/adapter.js';
+import type { DataSourceRegistry } from '../src/datasources/registry.js';
 import type { CommandResult } from '../src/types.js';
 
 function cliResult(over: Partial<CommandResult>): CommandResult {
@@ -20,7 +21,10 @@ function envelope(text: string): CommandResult {
   return cliResult({ stdout, json: JSON.parse(stdout) });
 }
 
-async function makeAdapter(results: CommandResult[], opts: { readOnly?: boolean } = {}) {
+async function makeAdapter(
+  results: CommandResult[],
+  opts: { readOnly?: boolean; dataSources?: DataSourceRegistry } = {},
+) {
   const dir = await mkdtemp(path.join(tmpdir(), 'cli-'));
   const store = new DashboardStore(path.join(dir, 'dashboards'));
   await store.init();
@@ -34,7 +38,9 @@ async function makeAdapter(results: CommandResult[], opts: { readOnly?: boolean 
     return results.shift() ?? cliResult({});
   };
   return {
-    adapter: new ClaudeCliAdapter({ store, commands, pending, toolkit, exec, readOnly: opts.readOnly }),
+    adapter: new ClaudeCliAdapter({
+      store, commands, pending, toolkit, exec, readOnly: opts.readOnly, dataSources: opts.dataSources,
+    }),
     store,
     pending,
     calls,
@@ -180,6 +186,44 @@ describe('ClaudeCliAdapter', () => {
       expect(prompt).toContain('최근 커밋'); // 위젯 제목 포함
       expect(events.find((e) => e.type === 'text'))
         .toEqual({ type: 'text', text: '최근 커밋은 abc123 입니다' });
+    });
+
+    it('includes http/postgres widget data in the prompt via dataSources', async () => {
+      const httpResult = cliResult({ stdout: '{"status":"ok"}', json: { status: 'ok' } });
+      const dataSources = {
+        get: () => ({ kind: 'http', fetch: async () => httpResult }),
+      } as unknown as DataSourceRegistry;
+      const { adapter, store, calls } = await makeAdapter(
+        [envelope('{"reply":"정상","operations":[]}')],
+        { dataSources },
+      );
+      const dashboard = await store.create('http대시');
+      await store.addWidget(dashboard.id, {
+        type: 'stat', title: 'API 상태', layout: { x: 0, y: 0, w: 3, h: 2 },
+        dataSource: { kind: 'http', commandId: '', params: {}, url: 'https://example.com/s' },
+      });
+      const { emit } = collect();
+      await adapter.chat('s1', '상태 어때?', emit, { dashboardId: dashboard.id });
+
+      const claudeCall = calls.find((c) => c[0] === 'claude')!;
+      const prompt = claudeCall[claudeCall.indexOf('-p') + 1];
+      expect(prompt).toContain('API 상태'); // 위젯 제목
+      expect(prompt).toContain('"status":"ok"'); // http 소스가 조회한 데이터
+    });
+
+    it('skips http widgets silently when no dataSources are injected', async () => {
+      const { adapter, store, calls } = await makeAdapter([
+        envelope('{"reply":"네","operations":[]}'),
+      ]);
+      const dashboard = await store.create('http대시');
+      await store.addWidget(dashboard.id, {
+        type: 'stat', title: 'API 상태', layout: { x: 0, y: 0, w: 3, h: 2 },
+        dataSource: { kind: 'http', commandId: '', params: {}, url: 'https://example.com/s' },
+      });
+      const { emit } = collect();
+      await adapter.chat('s1', '안녕', emit, { dashboardId: dashboard.id });
+      // 소스 미주입이라 위젯 데이터 없이도 정상 진행 (claude 호출 1회)
+      expect(calls.filter((c) => c[0] === 'claude')).toHaveLength(1);
     });
 
     it('identifies the current dashboard even when it has no widgets', async () => {
