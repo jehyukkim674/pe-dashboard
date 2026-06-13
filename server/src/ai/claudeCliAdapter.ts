@@ -5,6 +5,7 @@ import type { PgProfiles } from '../datasources/pgProfiles.js';
 import type { DataSourceRegistry } from '../datasources/registry.js';
 import type { CommandResult, Dashboard } from '../types.js';
 import { runArgv } from '../commands/runner.js';
+import { readAuditLog } from '../commands/auditLog.js';
 import { ResultCache } from '../commands/resultCache.js';
 import type { ToolKit } from './tools.js';
 import type { ChatAdapter, ChatContext, ChatEvent } from './adapter.js';
@@ -17,6 +18,15 @@ const MAX_SESSIONS = 20;
 const WIDGET_DATA_TIMEOUT_MS = 10_000;
 const WIDGET_DATA_MAX_CHARS = 1_500; // 위젯당 프롬프트에 넣는 데이터 상한
 const MAX_CONTEXT_WIDGETS = 8;
+
+// 에이전트 루프: inspect→재질의를 몇 번까지 돌지(마지막 라운드는 inspect 무시하고 마무리),
+// 라운드당 실행할 inspect 수·각 결과 크기 상한. inspect는 읽기 전용 도구만 허용한다.
+const MAX_AGENT_ROUNDS = 3;
+const MAX_INSPECTS_PER_ROUND = 4;
+const INSPECT_MAX_CHARS = 1_500;
+const INSPECT_TOOLS = new Set(['run_command_preview', 'list_commands', 'list_dashboards']);
+
+interface InspectRequest { tool?: string; input?: unknown }
 
 // 읽기 전용 도구만 승인 없이 허용하고, 파일 변경·임의 명령 실행 도구는 차단한다.
 // -p(print) 모드에서 allowedTools에 없는 도구는 권한 프롬프트 없이 거부되므로
@@ -68,19 +78,76 @@ export class ClaudeCliAdapter implements ChatAdapter {
     context?: ChatContext,
   ): Promise<void> {
     if (context?.dashboardId) emit({ type: 'status', stage: '화면 위젯 데이터 수집 중…' });
-    const prompt = await this.buildPrompt(sessionId, userMessage, context);
-
-    emit({ type: 'status', stage: 'AI 응답 생성 중…' });
+    const basePrompt = await this.buildPrompt(sessionId, userMessage, context);
     const modelFlags =
       context?.model && ALLOWED_MODELS.has(context.model) ? ['--model', context.model] : [];
 
-    // execStream이 주입되면 stream-json으로 응답 텍스트를 토큰 단위로 흘려 보여준다(표시 전용).
-    // operations 적용은 아래에서 최종 완성 텍스트를 extractJson으로 권위 있게 파싱하므로 영향 없음.
-    let result: CommandResult;
+    // 에이전트 루프: 모델이 inspect를 요청하면 읽기 전용 도구를 실행해 결과를 돌려주고 다시 묻는다.
+    // inspect가 없거나 라운드 상한에 닿으면 그 응답의 operations를 적용하고 끝낸다.
+    let inspectionLog = '';
+    let lastReply = '';
+    for (let round = 0; round < MAX_AGENT_ROUNDS; round++) {
+      emit({ type: 'status', stage: round === 0 ? 'AI 응답 생성 중…' : 'AI가 확인 결과를 반영하는 중…' });
+      const prompt = inspectionLog
+        ? `${basePrompt}\n\n${inspectionLog}\n위 "확인 결과"를 근거로 이제 최종 작업(operations)을 출력하라.`
+        : basePrompt;
+
+      const result = await this.runModel(prompt, modelFlags, emit, context?.signal);
+      if (context?.signal?.aborted) return; // 받을 사람이 없으니 조용히 종료
+      if (!result.ok) {
+        const base = result.error ?? 'claude CLI 실행에 실패했습니다';
+        const hint = base.includes('찾을 수 없습니다')
+          ? ' Claude Code CLI 설치가 필요합니다 (https://claude.com/claude-code).'
+          : '';
+        emit({ type: 'error', message: base + hint });
+        return;
+      }
+
+      const envelopeText = (result.json as { result?: string } | undefined)?.result ?? result.stdout;
+      let parsed: { reply?: string; operations?: Operation[]; inspect?: InspectRequest[] };
+      try {
+        parsed = extractJson(envelopeText);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        emit({ type: 'error', message: `응답 파싱 실패: ${message} — 원문: ${envelopeText.slice(0, 200)}` });
+        return;
+      }
+
+      if (parsed.reply) {
+        emit({ type: 'text', text: parsed.reply });
+        lastReply = parsed.reply;
+      }
+
+      const inspect = Array.isArray(parsed.inspect) ? parsed.inspect : [];
+      const isFinalRound = round === MAX_AGENT_ROUNDS - 1;
+      if (inspect.length > 0 && !isFinalRound) {
+        inspectionLog += (inspectionLog ? '\n' : '확인 결과:\n') + await this.runInspections(inspect, emit);
+        continue; // 결과를 반영해 다음 라운드로
+      }
+
+      const operations = parsed.operations ?? [];
+      if (this.deps.readOnly && operations.length > 0) {
+        emit({ type: 'error', message: '조회 전용 모드라 변경 작업은 적용하지 않았습니다.' });
+      } else {
+        await applyOperations(operations, this.deps.toolkit, emit, this.deps.pending);
+      }
+      break;
+    }
+    this.remember(sessionId, userMessage, lastReply);
+  }
+
+  // claude 1회 호출. execStream이 있으면 stream-json으로 reply를 토큰 단위로 흘려 보여준다(표시 전용,
+  // operations는 호출자가 최종 텍스트를 extractJson으로 파싱해 적용하므로 영향 없음).
+  private async runModel(
+    prompt: string,
+    modelFlags: string[],
+    emit: (e: ChatEvent) => void,
+    signal?: AbortSignal,
+  ): Promise<CommandResult> {
     if (this.deps.execStream) {
       let modelText = '';
       let emitted = 0;
-      result = await this.deps.execStream(
+      return this.deps.execStream(
         ['claude', '-p', prompt, '--output-format', 'stream-json', '--verbose',
           '--include-partial-messages', ...READONLY_CLI_FLAGS, ...modelFlags],
         (evt) => {
@@ -96,47 +163,34 @@ export class ClaudeCliAdapter implements ChatAdapter {
           }
         },
         CLI_TIMEOUT_MS,
-        context?.signal,
-      );
-    } else {
-      result = await this.exec(
-        ['claude', '-p', prompt, '--output-format', 'json', ...READONLY_CLI_FLAGS, ...modelFlags],
-        CLI_TIMEOUT_MS,
-        context?.signal, // 클라이언트가 끊으면 claude 프로세스도 종료
+        signal,
       );
     }
-    if (context?.signal?.aborted) return; // 받을 사람이 없으니 조용히 종료
+    return this.exec(
+      ['claude', '-p', prompt, '--output-format', 'json', ...READONLY_CLI_FLAGS, ...modelFlags],
+      CLI_TIMEOUT_MS,
+      signal,
+    );
+  }
 
-    if (!result.ok) {
-      const base = result.error ?? 'claude CLI 실행에 실패했습니다';
-      const hint = base.includes('찾을 수 없습니다')
-        ? ' Claude Code CLI 설치가 필요합니다 (https://claude.com/claude-code).'
-        : '';
-      emit({ type: 'error', message: base + hint });
-      return;
+  // 모델이 요청한 읽기 전용 inspect 도구를 실행하고 결과를 프롬프트용 텍스트로 모은다.
+  private async runInspections(inspect: InspectRequest[], emit: (e: ChatEvent) => void): Promise<string> {
+    const parts: string[] = [];
+    for (const req of inspect.slice(0, MAX_INSPECTS_PER_ROUND)) {
+      const tool = req?.tool;
+      if (typeof tool !== 'string' || !INSPECT_TOOLS.has(tool)) {
+        parts.push(`[${String(tool)}] 허용되지 않은 확인 도구입니다`);
+        continue;
+      }
+      emit({ type: 'tool', name: 'inspect', summary: `확인 중: ${tool}` });
+      try {
+        const output = await this.deps.toolkit.handlers[tool](req.input ?? {});
+        parts.push(`[${tool} ${JSON.stringify(req.input ?? {})}]\n${JSON.stringify(output).slice(0, INSPECT_MAX_CHARS)}`);
+      } catch (e) {
+        parts.push(`[${tool}] 오류: ${e instanceof Error ? e.message : String(e)}`);
+      }
     }
-
-    const envelopeText = (result.json as { result?: string } | undefined)?.result ?? result.stdout;
-    let parsed: { reply?: string; operations?: Operation[] };
-    try {
-      parsed = extractJson(envelopeText);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      emit({
-        type: 'error',
-        message: `응답 파싱 실패: ${message} — 원문: ${envelopeText.slice(0, 200)}`,
-      });
-      return;
-    }
-
-    if (parsed.reply) emit({ type: 'text', text: parsed.reply });
-    const operations = parsed.operations ?? [];
-    if (this.deps.readOnly && operations.length > 0) {
-      emit({ type: 'error', message: '조회 전용 모드라 변경 작업은 적용하지 않았습니다.' });
-    } else {
-      await applyOperations(operations, this.deps.toolkit, emit, this.deps.pending);
-    }
-    this.remember(sessionId, userMessage, parsed.reply ?? '');
+    return parts.join('\n');
   }
 
   // 대화 초기화: 프롬프트에 들어가는 요약 히스토리를 비워 AI가 이전 대화를 기억하지 않게 한다
@@ -171,6 +225,7 @@ export class ClaudeCliAdapter implements ChatAdapter {
       ? await this.deps.store.get(context.dashboardId).catch(() => undefined)
       : undefined;
     const screenText = current ? await this.screenContext(current) : '';
+    const failuresText = await this.recentFailures();
 
     // 프롬프트 다이어트: 현재 보고 있는 대시보드만 전체 구조(위젯 id·layout 포함)를 주고,
     // 나머지는 id·이름·위젯 제목만 요약한다. 대시보드가 늘어도 프롬프트가 비대해지지 않는다.
@@ -199,6 +254,7 @@ export class ClaudeCliAdapter implements ChatAdapter {
           '  {"op":"add_widget","dashboardId":"대시보드ID 또는 $last","widget":{"type":"stat|table|chart|log|text|status","title":"제목","layout":{"x":0,"y":0,"w":3,"h":2},"dataSource":{"kind":"cli","commandId":"명령ID","params":{},"refreshSec":30},"display":{}}},',
           '  {"op":"update_widget","dashboardId":"...","widgetId":"...","patch":{}},',
           '  {"op":"remove_widget","dashboardId":"...","widgetId":"..."},',
+          '  {"op":"set_alert","dashboardId":"...","widgetId":"...","alert":{"on":"fail"|"contains","pattern":"포함문자열"}},',
           '  {"op":"register_command","id":"...","description":"...","argv":["cmd","{param}"],"params":["param"]}',
           ']}',
           '',
@@ -209,6 +265,10 @@ export class ClaudeCliAdapter implements ChatAdapter {
           '- DB 조회 위젯은 dataSource를 {"kind":"postgres","commandId":"","params":{},"profile":"프로필명","query":"SELECT ..."}로 쓴다 (SELECT/WITH 단일 문만). HTTP JSON은 {"kind":"http","commandId":"","params":{},"url":"https://..."}.',
           '- 같은 응답에서 방금 만든 대시보드에 위젯을 추가할 때 dashboardId에 "$last"를 쓴다.',
           '- 필요한 명령 템플릿이 없으면 register_command를 사용한다 (사용자 승인이 필요함을 reply에 언급).',
+          '- "X가 실패하면 알림" 같은 요청은 set_alert로 처리한다: on="fail"(명령 실패 시), on="contains"(출력에 pattern 포함 시). 알림 해제는 alert를 null로.',
+          '- 위젯 구성 전 명령 출력 구조가 불확실하면 operations 대신 inspect로 먼저 확인할 수 있다(에이전트 단계):',
+          '  {"reply":"먼저 출력을 확인할게요","operations":[],"inspect":[{"tool":"run_command_preview","input":{"commandId":"명령ID","params":{}}}]}',
+          '  inspect 도구는 run_command_preview·list_commands·list_dashboards만 가능. 결과를 받은 다음 응답에서 operations로 구성하라. inspect와 operations를 동시에 넣지 마라.',
           '- 조회/질문만 있고 변경이 필요 없으면 operations를 빈 배열로 두고 reply로만 답한다.',
           '- 사용자가 대시보드를 명시하지 않은 위젯 추가·수정·삭제 요청은 "현재 보고 있는 대시보드"에 적용한다.',
         ];
@@ -228,9 +288,24 @@ export class ClaudeCliAdapter implements ChatAdapter {
         ? `사용 가능한 Postgres 프로필: ${JSON.stringify(this.deps.pgProfiles.names())}`
         : '',
       screenText,
+      failuresText,
       historyText ? `이전 대화:\n${historyText}` : '',
       `사용자 요청: ${userMessage}`,
     ].filter((line) => line !== '').join('\n');
+  }
+
+  // 최근 실패한 명령을 디버깅 단서로 프롬프트에 넣는다 (claude 자체 호출·성공은 제외).
+  // '위젯이 왜 비어 있어?' 같은 질문에 AI가 실제 실패 원인을 근거로 답할 수 있게 한다.
+  private async recentFailures(): Promise<string> {
+    try {
+      const failures = (await readAuditLog(80))
+        .filter((e) => !e.ok && e.argv[0] !== 'claude')
+        .slice(-8)
+        .map((e) => `- ${e.argv.join(' ').slice(0, 160)} (exit ${e.exitCode ?? '?'})`);
+      return failures.length > 0 ? `최근 실패한 명령 (디버깅 참고):\n${failures.join('\n')}` : '';
+    } catch {
+      return '';
+    }
   }
 
   // 사용자가 보고 있는 대시보드의 위젯 데이터를 실제로 조회해 최신 상태를 모은다.
@@ -305,7 +380,9 @@ export function extractReplyText(partial: string): string {
 
 // 코드펜스(```json ... ```)나 앞뒤 잡설이 섞여 있어도 JSON 객체를 찾아 파싱한다.
 // 잡설에 '{'가 섞인 경우를 대비해, 각 '{' 후보 위치에서 마지막 '}'까지 파싱을 시도한다.
-export function extractJson(text: string): { reply?: string; operations?: Operation[] } {
+export function extractJson(
+  text: string,
+): { reply?: string; operations?: Operation[]; inspect?: InspectRequest[] } {
   const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
   const candidate = fenced ? fenced[1] : text;
   const end = candidate.lastIndexOf('}');
@@ -315,6 +392,7 @@ export function extractJson(text: string): { reply?: string; operations?: Operat
       return JSON.parse(candidate.slice(start, end + 1)) as {
         reply?: string;
         operations?: Operation[];
+        inspect?: InspectRequest[];
       };
     } catch {
       start = candidate.indexOf('{', start + 1);

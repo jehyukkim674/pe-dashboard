@@ -57,8 +57,17 @@ const widgetSchema = {
 // 조회 전용 모드에서 차단되는 변경성 도구. 새 변경성 도구를 추가하면 여기에도 등록한다.
 const MUTATING_TOOLS = new Set([
   'create_dashboard', 'delete_dashboard', 'add_widget', 'update_widget',
-  'remove_widget', 'register_command',
+  'remove_widget', 'set_alert', 'register_command',
 ]);
+
+const alertSchema = {
+  type: 'object' as const,
+  properties: {
+    on: { type: 'string', enum: ['fail', 'contains'] },
+    pattern: { type: 'string', description: 'on=contains일 때 출력에서 찾을 문자열' },
+  },
+  required: ['on'],
+};
 
 // 확장 포인트: 이 배열에 정의+핸들러 쌍을 추가하면 AI 능력이 늘어난다.
 export function buildTools(ctx: ToolContext, opts: { readOnly?: boolean } = {}): ToolKit {
@@ -115,6 +124,21 @@ export function buildTools(ctx: ToolContext, opts: { readOnly?: boolean } = {}):
         type: 'object',
         properties: { dashboardId: { type: 'string' }, widgetId: { type: 'string' } },
         required: ['dashboardId', 'widgetId'],
+      },
+    },
+    {
+      name: 'set_alert',
+      description:
+        "위젯에 조건 알림을 설정한다. on='fail'은 명령 실패 시, on='contains'는 출력에 pattern 포함 시 알림. " +
+        '알림을 끄려면 alert를 null로 보낸다.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          dashboardId: { type: 'string' },
+          widgetId: { type: 'string' },
+          alert: { anyOf: [alertSchema, { type: 'null' }] },
+        },
+        required: ['dashboardId', 'widgetId', 'alert'],
       },
     },
     {
@@ -183,6 +207,11 @@ export function buildTools(ctx: ToolContext, opts: { readOnly?: boolean } = {}):
     remove_widget: async (input: { dashboardId: string; widgetId: string }) => {
       await ctx.store.removeWidget(input.dashboardId, input.widgetId);
       return { removed: input.widgetId };
+    },
+
+    set_alert: async (input: { dashboardId: string; widgetId: string; alert: Widget['alert'] | null }) => {
+      // null이면 해제 → undefined로 저장 시 제거
+      return ctx.store.updateWidget(input.dashboardId, input.widgetId, { alert: input.alert ?? undefined });
     },
 
     list_commands: async () => ctx.commands.list(),

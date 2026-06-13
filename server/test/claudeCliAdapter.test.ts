@@ -365,6 +365,48 @@ describe('ClaudeCliAdapter', () => {
     expect(secondPrompt).not.toContain('첫 답');
   });
 
+  describe('에이전트 루프(inspect)', () => {
+    it('runs an inspect round then applies operations from the next response', async () => {
+      const { adapter, store, calls } = await makeAdapter([
+        envelope('{"reply":"명령을 먼저 확인할게요","operations":[],"inspect":[{"tool":"list_commands","input":{}}]}'),
+        envelope('{"reply":"점검 대시보드를 만들었어요","operations":[{"op":"create_dashboard","name":"점검"}]}'),
+      ]);
+      const { events, emit } = collect();
+      await adapter.chat('s1', '점검 대시보드 만들어줘', emit);
+
+      const claudeCalls = calls.filter((c) => c[0] === 'claude');
+      expect(claudeCalls).toHaveLength(2); // inspect 1라운드 + 최종 1라운드
+      const secondPrompt = claudeCalls[1][claudeCalls[1].indexOf('-p') + 1];
+      expect(secondPrompt).toContain('확인 결과'); // inspect 결과가 다음 프롬프트에 반영됨
+      expect(events.some((e) => e.type === 'tool' && 'name' in e && e.name === 'inspect')).toBe(true);
+      expect((await store.list()).some((d) => d.name === '점검')).toBe(true);
+    });
+
+    it('stops at the round cap even if the model keeps requesting inspect', async () => {
+      const keepInspecting = () =>
+        envelope('{"reply":"또 확인","operations":[],"inspect":[{"tool":"list_commands","input":{}}]}');
+      const { adapter, calls } = await makeAdapter([
+        keepInspecting(), keepInspecting(), keepInspecting(), keepInspecting(), keepInspecting(),
+      ]);
+      const { emit } = collect();
+      await adapter.chat('s1', '뭐든', emit);
+      // 무한 루프 방지: claude 호출이 상한(3)을 넘지 않는다
+      expect(calls.filter((c) => c[0] === 'claude').length).toBeLessThanOrEqual(3);
+    });
+
+    it('rejects non-allowlisted inspect tools', async () => {
+      const { adapter, calls } = await makeAdapter([
+        envelope('{"reply":"확인","operations":[],"inspect":[{"tool":"delete_dashboard","input":{"id":"x"}}]}'),
+        envelope('{"reply":"끝","operations":[]}'),
+      ]);
+      const { emit } = collect();
+      await adapter.chat('s1', '뭐든', emit);
+      const claudeCalls = calls.filter((c) => c[0] === 'claude');
+      const secondPrompt = claudeCalls[1][claudeCalls[1].indexOf('-p') + 1];
+      expect(secondPrompt).toContain('허용되지 않은 확인 도구'); // delete_dashboard는 inspect 불가
+    });
+  });
+
   describe('스트리밍', () => {
     it('streams reply text as text_delta and finalizes with text + operations', async () => {
       // 모델 출력 JSON을 조각내어 델타로 흘린다

@@ -1,7 +1,7 @@
 import type { ToolKit } from './tools.js';
 import type { ChatEvent } from './adapter.js';
 import type { PendingCommands } from '../commands/pending.js';
-import type { CommandTemplate, Widget } from '../types.js';
+import type { CommandTemplate, Widget, WidgetAlert } from '../types.js';
 import { describeToolCall } from './describe.js';
 
 export type Operation =
@@ -10,6 +10,7 @@ export type Operation =
   | { op: 'add_widget'; dashboardId: string; widget: Omit<Widget, 'id'> }
   | { op: 'update_widget'; dashboardId: string; widgetId: string; patch: Partial<Widget> }
   | { op: 'remove_widget'; dashboardId: string; widgetId: string }
+  | { op: 'set_alert'; dashboardId: string; widgetId: string; alert: WidgetAlert | null }
   | { op: 'register_command'; id: string; description: string; argv: string[]; params: string[] };
 
 // 같은 응답 안에서 '방금 만든 대시보드'를 참조하는 별칭
@@ -115,6 +116,16 @@ function toToolCall(
       return {
         name: 'remove_widget',
         input: { dashboardId: resolve(operation.dashboardId), widgetId: operation.widgetId },
+      };
+    case 'set_alert':
+      // 알림 설정은 위젯 patch로 적용 (alert:null이면 해제 → undefined로 보내 저장 시 제거)
+      return {
+        name: 'update_widget',
+        input: {
+          dashboardId: resolve(operation.dashboardId),
+          widgetId: operation.widgetId,
+          patch: { alert: operation.alert ?? undefined },
+        },
       };
     case 'register_command':
       return {

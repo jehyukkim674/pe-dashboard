@@ -74,4 +74,19 @@ describe('applyOperations', () => {
     await applyOperations([{ op: 'format_disk' } as never], toolkit, emit);
     expect(events.some((e) => e.type === 'error')).toBe(true);
   });
+
+  it('set_alert sets and clears a widget alert', async () => {
+    const d = await store.create('알림');
+    const w = await store.addWidget(d.id, {
+      type: 'log', title: '로그', layout: { x: 0, y: 0, w: 6, h: 5 },
+      dataSource: { kind: 'cli', commandId: 'gh_run_list', params: { repo: 'a/b' } },
+    });
+    // 자연어 요청이 매핑되는 형태: 실패 시 알림
+    await applyOperations([{ op: 'set_alert', dashboardId: d.id, widgetId: w.id, alert: { on: 'fail' } }], toolkit, emit);
+    expect((await store.get(d.id))!.widgets[0].alert).toEqual({ on: 'fail' });
+
+    // null이면 해제
+    await applyOperations([{ op: 'set_alert', dashboardId: d.id, widgetId: w.id, alert: null }], toolkit, emit);
+    expect((await store.get(d.id))!.widgets[0].alert).toBeUndefined();
+  });
 });
