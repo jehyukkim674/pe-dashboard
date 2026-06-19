@@ -1,7 +1,10 @@
 import { app, shell, type BrowserWindow } from 'electron';
 import { spawnSync } from 'node:child_process';
+import { accessSync, constants } from 'node:fs';
 import path from 'node:path';
 import { autoUpdater } from 'electron-updater';
+import { classifyBundlePath, type InstallStrategy } from './update-helpers.js';
+import { currentBundlePath, downloadUnsigned, restartWithSwap } from './updater-unsigned.js';
 
 autoUpdater.autoDownload = false; // 사용자가 [업데이트]를 눌러야 다운로드
 
@@ -12,26 +15,45 @@ export type UpdateCheck =
   | { kind: 'latest'; currentVersion: string }
   | { kind: 'error'; message: string };
 
-// macOS 자동 업데이트(Squirrel.Mac)는 Developer ID 정식 서명을 요구한다. ad-hoc 서명 앱은
-// 다운로드는 되지만 quitAndInstall이 서명 검증에 실패해 적용되지 않는다. 그래서 서명 여부를
-// codesign으로 확인해, 서명이 안 됐으면 자동 설치 대신 수동 다운로드를 안내한다.
-let signedCache: boolean | undefined;
-export function canAutoInstall(): boolean {
-  if (signedCache !== undefined) return signedCache;
-  signedCache = false;
+// macOS 자동 업데이트(Squirrel.Mac)는 Developer ID 정식 서명을 요구한다. 미서명 빌드는
+// quitAndInstall이 서명 검증에 실패하므로, 미서명이면 커스텀 다운로드+교체(custom)로,
+// 교체 불가한 위치(읽기전용/App Translocation)면 수동 폴백(manual)으로 분기한다.
+let strategyCache: InstallStrategy | undefined;
+
+function isSigned(): boolean {
   try {
-    // app.getPath('exe') = .../PE Dashboard.app/Contents/MacOS/PE Dashboard → 번들 루트는 3단계 위
-    const bundle = path.resolve(app.getPath('exe'), '..', '..', '..');
+    const bundle = currentBundlePath();
     const r = spawnSync('codesign', ['-dvv', bundle], { encoding: 'utf8' });
     const info = `${r.stderr ?? ''}${r.stdout ?? ''}`;
-    // Developer ID로 서명되면 TeamIdentifier가 설정되고 Authority에 'Developer ID Application'이 뜬다
-    signedCache =
+    return (
       /Authority=Developer ID Application/.test(info) ||
-      (/TeamIdentifier=/.test(info) && !/TeamIdentifier=not set/.test(info));
+      (/TeamIdentifier=/.test(info) && !/TeamIdentifier=not set/.test(info))
+    );
   } catch {
-    signedCache = false;
+    return false;
   }
-  return signedCache;
+}
+
+function isBundleWritable(bundle: string): boolean {
+  try {
+    accessSync(path.dirname(bundle), constants.W_OK);
+    accessSync(bundle, constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// 설치 전략: 서명됨→squirrel, 미서명+교체가능→custom, 그 외→manual(수동 폴백).
+export function installStrategy(): InstallStrategy {
+  if (strategyCache !== undefined) return strategyCache;
+  if (isSigned()) {
+    strategyCache = 'squirrel';
+  } else {
+    const bundle = currentBundlePath();
+    strategyCache = classifyBundlePath(bundle, isBundleWritable(bundle));
+  }
+  return strategyCache;
 }
 
 // 서명 안 된 빌드에서 자동 적용 대신 최신 릴리스 페이지를 연다 (수동 다운로드·교체 안내)
@@ -65,25 +87,29 @@ export async function checkUpdateStatus(): Promise<UpdateCheck> {
       currentVersion,
       version: info.version,
       notes: flattenNotes(info.releaseNotes),
-      canAutoInstall: canAutoInstall(),
+      canAutoInstall: installStrategy() !== 'manual',
     };
   } catch (e) {
     return { kind: 'error', message: e instanceof Error ? e.message : String(e) };
   }
 }
 
-// 다운로드 진행률 0~99% 송출, 완료 시 100% 송출. 재시작은 사용자가 '지금 재시작'을 눌러야 한다
-// (electron-updater 기본값 autoInstallOnAppQuit=true라, 나중에 종료해도 자동 적용된다).
+// 다운로드 진행률 0~100% 송출. 재시작은 사용자가 '지금 재시작'을 눌러야 한다.
 export async function startInstall(win: BrowserWindow): Promise<void> {
-  // electron-updater는 다운로드 전에 같은 세션의 체크 상태를 요구한다
-  // ("Please check update first"). 직전에 한 번 더 체크해 상태를 보장한다.
+  const send = (percent: number) => win.webContents.send('updater:progress', percent);
+
+  if (installStrategy() === 'custom') {
+    // 미서명: 커스텀 다운로드+압축해제(교체는 restartToUpdate에서)
+    await downloadUnsigned(send);
+    return;
+  }
+
+  // 서명: electron-updater. 다운로드 전에 같은 세션의 체크 상태를 요구한다.
   const result = await autoUpdater.checkForUpdates();
   const info = result?.updateInfo;
   if (!info || !isNewerVersion(info.version, app.getVersion())) {
     throw new Error('설치할 새 버전이 없습니다');
   }
-
-  const send = (percent: number) => win.webContents.send('updater:progress', percent);
   autoUpdater.removeAllListeners('download-progress');
   autoUpdater.removeAllListeners('update-downloaded');
   autoUpdater.on('download-progress', (p) => send(Math.min(99, Math.round(p.percent))));
@@ -92,8 +118,12 @@ export async function startInstall(win: BrowserWindow): Promise<void> {
   await autoUpdater.downloadUpdate();
 }
 
-// 다운로드된 업데이트를 적용하며 앱을 재시작한다 (사용자가 '지금 재시작' 클릭 시)
+// 다운로드된 업데이트를 적용하며 앱을 재시작한다.
 export function restartToUpdate(): void {
+  if (installStrategy() === 'custom') {
+    restartWithSwap();
+    return;
+  }
   autoUpdater.quitAndInstall();
 }
 
