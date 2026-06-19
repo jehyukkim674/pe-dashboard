@@ -1,7 +1,7 @@
 # 명령 실패 진단 (Command Failure Diagnosis)
 
 작성일: 2026-06-19
-상태: 설계 승인됨 (구현 대기)
+상태: 구현 완료 (브랜치 feat/command-failure-diagnosis)
 
 ## 배경 / 문제
 
