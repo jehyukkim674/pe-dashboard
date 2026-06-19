@@ -31,4 +31,25 @@ describe('auditLog', () => {
     const entries = await readAuditLog(2);
     expect(entries.map((e) => e.argv[0])).toEqual(['cmd3', 'cmd4']);
   });
+
+  it('실패 엔트리에 stderr(마스킹·절단)와 category를 기록한다', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'audit-'));
+    configureAuditLog(path.join(dir, 'commands.jsonl'));
+    logCommand({
+      argv: ['kubectl', 'get', 'pods'], ok: false, exitCode: 1, durationMs: 5,
+      stderr: 'Authorization: Bearer abc123def token=secret9 ' + 'x'.repeat(800),
+      category: 'auth_expired',
+    });
+    logCommand({ argv: ['git', 'log'], ok: true, exitCode: 0, durationMs: 3 });
+    await new Promise((r) => setTimeout(r, 50));
+
+    const [fail, ok] = await readAuditLog();
+    expect(fail.category).toBe('auth_expired');
+    expect(fail.stderr!.length).toBeLessThanOrEqual(500);
+    expect(fail.stderr).toContain('Bearer ***');
+    expect(fail.stderr).toContain('token=***');
+    expect(fail.stderr).not.toContain('secret9');
+    expect(ok.stderr).toBeUndefined(); // 성공 엔트리엔 stderr 없음
+    expect(ok.category).toBeUndefined();
+  });
 });
