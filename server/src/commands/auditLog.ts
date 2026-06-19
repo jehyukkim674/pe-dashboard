@@ -11,8 +11,8 @@ const MAX_STDERR_CHARS = 500;
 // 토큰류 비밀값을 가리고 길이를 제한한다(로컬 앱이지만 stderr에 자격증명이 찍힐 수 있음).
 export function redactStderr(stderr: string): string {
   return stderr
-    .replace(/(bearer\s+)[\w.\-]+/gi, '$1***')
-    .replace(/(token[=:]\s*)[\w.\-]+/gi, '$1***')
+    .replace(/(bearer\s+)[\w.-]+/gi, '$1***')
+    .replace(/(token[=:]\s*)[\w.-]+/gi, '$1***')
     .replace(/(password[=:]\s*)\S+/gi, '$1***')
     .slice(0, MAX_STDERR_CHARS);
 }
