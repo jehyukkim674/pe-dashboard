@@ -4,8 +4,44 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PE Dashboard</title>
+    <style>
+      /* 부팅 로더: 메인 창이 뜬 직후 React가 메뉴를 그리기 전까지 빈 화면 대신
+         즉시 보일 진행 바. 외부 에셋 없이 인라인으로 둬 첫 페인트에 바로 그려진다. */
+      #boot-loader {
+        position: fixed; inset: 0; z-index: 9999;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 14px; background: #f5f5f5; transition: opacity .25s ease;
+        font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
+      }
+      #boot-loader.bl-dark { background: #141414; }
+      #boot-loader .bl-brand { font-size: 20px; font-weight: 600; letter-spacing: .2px; color: #1a1a1a; }
+      #boot-loader.bl-dark .bl-brand { color: #ededed; }
+      #boot-loader .bl-sub { font-size: 12px; color: #8c8c8c; }
+      #boot-loader .bl-bar {
+        width: 200px; height: 4px; border-radius: 2px;
+        background: rgba(22, 119, 255, .15); overflow: hidden;
+      }
+      #boot-loader .bl-bar-fill {
+        width: 40%; height: 100%; border-radius: 2px; background: #1677ff;
+        animation: bl-slide 1.1s ease-in-out infinite;
+      }
+      @keyframes bl-slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+    </style>
   </head>
   <body>
+    <div id="boot-loader">
+      <div class="bl-brand">PE Dashboard</div>
+      <div class="bl-bar"><div class="bl-bar-fill"></div></div>
+      <div class="bl-sub">불러오는 중…</div>
+    </div>
+    <script>
+      // 앱 다크모드는 localStorage 기준이라 React 마운트 전에 미리 맞춰 깜빡임을 줄인다
+      try {
+        if (localStorage.getItem('pe-dark') === '1') {
+          document.getElementById('boot-loader').classList.add('bl-dark');
+        }
+      } catch (e) { /* 접근 불가 시 기본(밝은) 유지 */ }
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

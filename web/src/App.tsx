@@ -81,6 +81,15 @@ export default function App() {
     void refresh().catch((e) => void message.error(`목록 조회 실패: ${(e as Error).message}`));
   }, [refresh]);
 
+  // 메뉴 셸이 처음 그려지면 index.html의 부팅 로더를 페이드아웃 후 제거한다
+  useEffect(() => {
+    const loader = document.getElementById('boot-loader');
+    if (!loader) return;
+    loader.style.opacity = '0';
+    const timer = setTimeout(() => loader.remove(), 250);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Cmd+K(맥)/Ctrl+K: AI 채팅 토글
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
