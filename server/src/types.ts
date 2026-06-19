@@ -48,6 +48,16 @@ export interface CommandTemplate {
   builtin?: boolean;
 }
 
+export type DiagnosisCategory =
+  | 'not_installed' | 'timeout' | 'auth_expired' | 'unreachable'
+  | 'context_missing' | 'permission_denied' | 'not_found' | 'bad_usage' | 'unknown';
+
+export interface Diagnosis {
+  category: DiagnosisCategory;
+  label: string; // 위젯/패널 배지 문구
+  hint: string;  // 사용자 조치 안내
+}
+
 export interface CommandResult {
   ok: boolean;
   exitCode: number | null;
@@ -55,4 +65,5 @@ export interface CommandResult {
   stderr: string;
   json?: unknown; // stdout이 JSON 파싱되면 채움
   error?: string; // 사용자에게 보여줄 친절한 에러
+  diagnosis?: Diagnosis; // 실패(ok:false) 시에만 채움
 }

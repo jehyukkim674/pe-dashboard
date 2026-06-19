@@ -91,14 +91,14 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, 
   const shown = result?.ok === false && lastGood ? lastGood : result;
   const errorBanner = result?.error && (
     <div
-      title={result.error}
+      title={result.stderr || result.error}
       style={{
         flexShrink: 0, fontSize: 11, color: '#fff', background: '#ff4d4f',
         borderRadius: 4, padding: '2px 8px', marginBottom: 6,
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
       }}
     >
-      {result.error}
+      {result.diagnosis ? `${result.diagnosis.label} · ${result.error}` : result.error}
     </div>
   );
 
@@ -106,7 +106,26 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, 
     if (widget.type === 'text') return <TextWidget display={widget.display} />;
     if (loading && !shown) return <Skeleton active title={false} paragraph={{ rows: 3 }} />;
     if (shown?.error && !lastGood) {
-      return <Alert type="warning" showIcon message={shown.error} style={{ fontSize: 12 }} />;
+      return (
+        <Alert
+          type="warning"
+          showIcon
+          message={shown.diagnosis?.label ?? '실패'}
+          description={
+            <div style={{ fontSize: 12 }}>
+              <div>{shown.error}</div>
+              {shown.stderr && (
+                <details style={{ marginTop: 4 }}>
+                  <summary style={{ cursor: 'pointer', color: '#888' }}>원문 보기</summary>
+                  <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: '4px 0 0', fontSize: 11 }}>
+                    {shown.stderr.slice(0, 1000)}
+                  </pre>
+                </details>
+              )}
+            </div>
+          }
+        />
+      );
     }
     switch (widget.type) {
       case 'stat': return <StatWidget result={shown} display={widget.display} widgetId={widget.id} updatedAt={updatedAt} />;

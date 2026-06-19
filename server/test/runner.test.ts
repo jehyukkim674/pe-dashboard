@@ -19,18 +19,22 @@ describe('runArgv', () => {
   it('reports friendly error for missing binary', async () => {
     const result = await runArgv(['definitely-not-a-command-xyz']);
     expect(result.ok).toBe(false);
+    expect(result.diagnosis?.category).toBe('not_installed');
     expect(result.error).toMatch(/찾을 수 없습니다/);
   });
 
-  it('reports failure with stderr message', async () => {
-    const result = await runArgv(['node', '-e', 'console.error("auth required"); process.exit(1)']);
+  it('classifies auth failure from stderr', async () => {
+    const result = await runArgv(['node', '-e', 'console.error("error: You must be logged in (Unauthorized)"); process.exit(1)']);
     expect(result.ok).toBe(false);
-    expect(result.error).toContain('auth required');
+    expect(result.diagnosis?.category).toBe('auth_expired');
+    expect(result.error).toBe(result.diagnosis?.hint);
+    expect(result.stderr).toContain('Unauthorized'); // 원문은 stderr에 보존
   });
 
   it('times out long-running commands', async () => {
     const result = await runArgv(['node', '-e', 'setTimeout(()=>{}, 60000)'], 500);
     expect(result.ok).toBe(false);
+    expect(result.diagnosis?.category).toBe('timeout');
     expect(result.error).toMatch(/초과/);
   }, 10_000);
 
@@ -40,10 +44,11 @@ describe('runArgv', () => {
     expect(result.error).toMatch(/비어/);
   });
 
-  it('extracts non-zero exit code with generic stderr fallback', async () => {
+  it('extracts non-zero exit code with unknown diagnosis', async () => {
     const result = await runArgv(['node', '-e', 'console.error("boom"); process.exit(5)']);
     expect(result.ok).toBe(false);
     expect(result.exitCode).toBe(5);
-    expect(result.error).toContain('boom');
+    expect(result.diagnosis?.category).toBe('unknown');
+    expect(result.stderr).toContain('boom');
   });
 });

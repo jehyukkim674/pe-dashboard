@@ -301,7 +301,10 @@ export class ClaudeCliAdapter implements ChatAdapter {
       const failures = (await readAuditLog(80))
         .filter((e) => !e.ok && e.argv[0] !== 'claude')
         .slice(-8)
-        .map((e) => `- ${e.argv.join(' ').slice(0, 160)} (exit ${e.exitCode ?? '?'})`);
+        .map((e) => {
+          const cat = e.category ? ` [${e.category}]` : '';
+          return `- ${e.argv.join(' ').slice(0, 160)} (exit ${e.exitCode ?? '?'})${cat}`;
+        });
       return failures.length > 0 ? `최근 실패한 명령 (디버깅 참고):\n${failures.join('\n')}` : '';
     } catch {
       return '';
@@ -322,7 +325,8 @@ export class ClaudeCliAdapter implements ChatAdapter {
           if (!result) return undefined; // http/postgres인데 소스 미주입(테스트) → 건너뜀
           const raw = result.ok
             ? result.stdout || (result.json !== undefined ? JSON.stringify(result.json) : '')
-            : `(조회 실패: ${result.error ?? '알 수 없는 오류'})`;
+            : `(조회 실패: category=${result.diagnosis?.category ?? 'unknown'} — ${result.error ?? '알 수 없는 오류'}` +
+              (result.stderr ? `\n  stderr: ${result.stderr.slice(0, 300)}` : '') + ')';
           return `[위젯 "${w.title}"]\n${raw.slice(0, WIDGET_DATA_MAX_CHARS)}`;
         } catch (e) {
           return `[위젯 "${w.title}"]\n(실행 불가: ${e instanceof Error ? e.message : String(e)})`;

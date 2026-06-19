@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import type { CommandResult } from '../types.js';
-import { logCommand } from './auditLog.js';
+import { logCommand, maskSecrets } from './auditLog.js';
+import { diagnose } from './diagnose.js';
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_BUFFER = 4 * 1024 * 1024;
@@ -26,15 +27,33 @@ export function runArgv(
           ok: !err,
           exitCode: err ? exitCodeOf(err) : 0,
           stdout,
-          stderr,
+          // 분류는 아래에서 원문 stderr로 수행하고, 노출용 stderr는 비밀값을 가린다.
+          // (위젯 표시·AI 프롬프트가 이 값을 그대로 쓰므로 모든 표면이 동일하게 마스킹된다)
+          stderr: maskSecrets(stderr),
         };
-        if (err) result.error = friendlyError(err, stderr, argv[0], timeoutMs);
+        if (err) {
+          const e = err as NodeJS.ErrnoException & { killed?: boolean };
+          result.diagnosis = diagnose(argv, {
+            exitCode: result.exitCode,
+            stderr,
+            errCode: e.code,
+            killed: e.killed,
+          });
+          result.error = result.diagnosis.hint; // 하위호환: error = hint
+        }
         try {
           result.json = JSON.parse(stdout);
         } catch {
           // JSON이 아니면 raw stdout만 사용
         }
-        logCommand({ argv, ok: result.ok, exitCode: result.exitCode, durationMs: Date.now() - startedAt });
+        logCommand({
+          argv,
+          ok: result.ok,
+          exitCode: result.exitCode,
+          durationMs: Date.now() - startedAt,
+          stderr: err ? stderr : undefined,
+          category: result.diagnosis?.category,
+        });
         resolve(result);
       },
     );
@@ -44,14 +63,4 @@ export function runArgv(
 function exitCodeOf(err: Error): number | null {
   const code = (err as NodeJS.ErrnoException).code;
   return typeof code === 'number' ? code : null;
-}
-
-function friendlyError(err: Error, stderr: string, cmd: string, timeoutMs: number): string {
-  const e = err as NodeJS.ErrnoException & { killed?: boolean };
-  if (e.code === 'ENOENT') return `'${cmd}' 명령을 찾을 수 없습니다. 설치 및 PATH를 확인하세요.`;
-  if (e.killed) return `명령 실행이 ${timeoutMs / 1000}초를 초과해 중단되었습니다.`;
-  if (/auth|login|credential/i.test(stderr)) {
-    return `로그인이 필요할 수 있습니다: ${stderr.slice(0, 200)}`;
-  }
-  return stderr.slice(0, 300) || err.message;
 }

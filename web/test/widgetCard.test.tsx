@@ -1,7 +1,16 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import WidgetCard from '../src/components/WidgetCard';
 import type { Widget } from '../src/types';
+import * as apiModule from '../src/api';
+
+const diagWidget: Widget = {
+  id: 'w2',
+  type: 'stat',
+  title: '클러스터 상태',
+  layout: { x: 0, y: 0, w: 4, h: 3 },
+  dataSource: { kind: 'cli', commandId: 'cmd1', params: {} },
+};
 
 const textWidget: Widget = {
   id: 'w1',
@@ -26,6 +35,38 @@ describe('WidgetCard', () => {
     // 데이터 소스가 없으니 갱신 주기 select·새로고침은 없어야 한다
     expect(document.querySelector('.ant-select')).toBeNull();
     expect(document.querySelector('.anticon-reload')).toBeNull();
+  });
+
+  it('shows diagnosis label badge and hint when command fails with diagnosis', async () => {
+    // api.widgetData를 모킹해 진단 정보가 포함된 실패 결과를 반환
+    vi.spyOn(apiModule.api, 'widgetData').mockResolvedValue({
+      ok: false,
+      exitCode: 1,
+      stdout: '',
+      stderr: 'Unauthorized',
+      error: '재로그인이 필요합니다 — gh auth login / argocd login / kubeconfig 토큰 갱신',
+      diagnosis: {
+        category: 'auth_expired',
+        label: '인증만료',
+        hint: '재로그인이 필요합니다 — gh auth login / argocd login / kubeconfig 토큰 갱신',
+      },
+    });
+
+    render(
+      <WidgetCard
+        widget={diagWidget}
+        onRemove={() => {}}
+        onChangeRefresh={() => {}}
+        onEdit={() => {}}
+        onDuplicate={() => {}}
+      />,
+    );
+
+    // Alert 본문에 진단 배지('인증만료')와 조치 힌트가 표시되어야 한다
+    expect(await screen.findByText('인증만료')).toBeTruthy();
+    expect(screen.getByText(/재로그인이 필요합니다/)).toBeTruthy();
+
+    vi.restoreAllMocks();
   });
 
   it('opens a fullscreen modal showing the widget content', () => {
