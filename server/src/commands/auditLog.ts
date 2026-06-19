@@ -8,13 +8,18 @@ import type { DiagnosisCategory } from '../types.js';
 const MAX_ARG_CHARS = 200; // claude 프롬프트처럼 긴 인자는 잘라서 기록
 const MAX_STDERR_CHARS = 500;
 
-// 토큰류 비밀값을 가리고 길이를 제한한다(로컬 앱이지만 stderr에 자격증명이 찍힐 수 있음).
+// stderr에 찍히는 토큰류 비밀값을 가린다(env형 token=… 와 JSON형 "token":"…" 모두).
+// 잘라내기 없이 마스킹만 하므로 위젯 알림 패턴 매칭(stdout+stderr) 등 길이 의존 로직을 깨지 않는다.
+export function maskSecrets(s: string): string {
+  return s
+    .replace(/(bearer\s+)["']?[\w.-]+/gi, '$1***')
+    .replace(/((?:token|api[_-]?key|secret|client[_-]?secret)["']?\s*[=:]\s*)["']?[\w.-]+/gi, '$1***')
+    .replace(/(password["']?\s*[=:]\s*)["']?\S+/gi, '$1***');
+}
+
+// 감사 로그 영속화용: 마스킹 후 길이까지 제한한다.
 export function redactStderr(stderr: string): string {
-  return stderr
-    .replace(/(bearer\s+)[\w.-]+/gi, '$1***')
-    .replace(/(token[=:]\s*)[\w.-]+/gi, '$1***')
-    .replace(/(password[=:]\s*)\S+/gi, '$1***')
-    .slice(0, MAX_STDERR_CHARS);
+  return maskSecrets(stderr).slice(0, MAX_STDERR_CHARS);
 }
 
 export interface AuditEntry {

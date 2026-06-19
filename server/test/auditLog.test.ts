@@ -2,7 +2,30 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { configureAuditLog, logCommand, readAuditLog } from '../src/commands/auditLog.js';
+import { configureAuditLog, logCommand, readAuditLog, maskSecrets } from '../src/commands/auditLog.js';
+
+describe('maskSecrets', () => {
+  it('env형(token=…)·Bearer 토큰을 가린다', () => {
+    expect(maskSecrets('Bearer abc123def token=secret9')).toBe('Bearer *** token=***');
+    expect(maskSecrets('password=p@ss!word')).toBe('password=***');
+  });
+
+  it('JSON형 따옴표 값("token":"…")을 가린다', () => {
+    const masked = maskSecrets('{"token": "abc123secret", "ok": false}');
+    expect(masked).not.toContain('abc123secret');
+    expect(masked).toContain('***');
+  });
+
+  it('apikey/secret/client_secret 키도 가린다', () => {
+    expect(maskSecrets('api_key=KEY12345')).not.toContain('KEY12345');
+    expect(maskSecrets('client_secret: CS_9988')).not.toContain('CS_9988');
+  });
+
+  it('비밀값이 없으면 원문을 보존한다(분류 단서 유지)', () => {
+    const s = 'error: context "ns-oss-cmdb" not found';
+    expect(maskSecrets(s)).toBe(s);
+  });
+});
 
 describe('auditLog', () => {
   it('appends entries and reads them back (long args truncated)', async () => {

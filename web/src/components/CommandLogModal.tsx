@@ -49,7 +49,7 @@ export default function CommandLogModal({ onClose }: { onClose: () => void }) {
           rowExpandable: (r) => !!r.stderr,
           expandedRowRender: (r) => (
             <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0, fontSize: 11 }}>
-              {r.stderr}
+              {r.stderr?.slice(0, 2000)}
             </pre>
           ),
         }}

@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import type { CommandResult } from '../types.js';
-import { logCommand } from './auditLog.js';
+import { logCommand, maskSecrets } from './auditLog.js';
 import { diagnose } from './diagnose.js';
 
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -27,7 +27,9 @@ export function runArgv(
           ok: !err,
           exitCode: err ? exitCodeOf(err) : 0,
           stdout,
-          stderr,
+          // 분류는 아래에서 원문 stderr로 수행하고, 노출용 stderr는 비밀값을 가린다.
+          // (위젯 표시·AI 프롬프트가 이 값을 그대로 쓰므로 모든 표면이 동일하게 마스킹된다)
+          stderr: maskSecrets(stderr),
         };
         if (err) {
           const e = err as NodeJS.ErrnoException & { killed?: boolean };
