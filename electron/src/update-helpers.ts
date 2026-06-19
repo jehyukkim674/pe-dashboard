@@ -9,3 +9,15 @@ export function classifyBundlePath(bundlePath: string, isWritable: boolean): 'cu
   if (bundlePath.includes('/AppTranslocation/')) return 'manual';
   return 'custom';
 }
+
+export interface GithubAsset { name: string; browser_download_url: string }
+export interface GithubRelease { tag_name?: string; assets: GithubAsset[] }
+
+// arm64 mac zip 에셋의 다운로드 URL을 고른다(.blockmap 제외).
+export function pickArm64ZipUrl(release: GithubRelease): string {
+  const asset = release.assets.find(
+    (a) => /-arm64-mac\.zip$/.test(a.name) && !a.name.endsWith('.blockmap'),
+  );
+  if (!asset) throw new Error('릴리스에서 arm64 mac zip 에셋을 찾지 못했습니다');
+  return asset.browser_download_url;
+}
