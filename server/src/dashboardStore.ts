@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { Dashboard, Widget } from './types.js';
+import { writeJsonAtomic } from './jsonFile.js';
 
 export class DashboardStore {
   constructor(private readonly dir: string) {}
@@ -96,12 +97,8 @@ export class DashboardStore {
     return dashboard;
   }
 
-  // 원자적 쓰기: temp 파일에 쓴 뒤 rename
   private async write(dashboard: Dashboard): Promise<void> {
-    const target = this.filePath(dashboard.id);
-    const tmp = `${target}.${randomUUID()}.tmp`;
-    await fs.writeFile(tmp, JSON.stringify(dashboard, null, 2));
-    await fs.rename(tmp, target);
+    await writeJsonAtomic(this.filePath(dashboard.id), dashboard);
   }
 }
 

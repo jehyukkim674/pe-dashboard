@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { DashboardStore } from './dashboardStore.js';
 import type { CommandRegistry } from './commands/registry.js';
+import { writeJsonAtomic } from './jsonFile.js';
 
 const KEEP_BACKUPS = 7;
 const FILE_RE = /^backup-\d{4}-\d{2}-\d{2}\.json$/;
@@ -29,7 +30,7 @@ export async function writeDailyBackup(
     dashboards: await store.list(),
     commands: commands.list().filter((t) => !t.builtin),
   };
-  await fs.writeFile(file, JSON.stringify(bundle, null, 2));
+  await writeJsonAtomic(file, bundle);
 
   const files = (await fs.readdir(dir)).filter((f) => FILE_RE.test(f)).sort();
   for (const old of files.slice(0, Math.max(0, files.length - KEEP_BACKUPS))) {

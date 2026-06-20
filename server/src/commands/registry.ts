@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import type { CommandTemplate } from '../types.js';
 import { assertSafeArgv } from './safety.js';
+import { writeJsonAtomic } from '../jsonFile.js';
 
 const BUILTIN: CommandTemplate[] = [
   {
@@ -95,9 +96,7 @@ export class CommandRegistry {
     if (this.get(template.id)) throw new Error(`template already exists: ${template.id}`);
     validateTemplate(template);
     this.custom.push({ ...template, builtin: false });
-    const tmp = `${this.customFile}.tmp`;
-    await fs.writeFile(tmp, JSON.stringify(this.custom, null, 2));
-    await fs.rename(tmp, this.customFile);
+    await writeJsonAtomic(this.customFile, this.custom);
   }
 
   // 화이트리스트 검증의 핵심: 등록된 템플릿의 {placeholder} 위치에만 값 치환.
