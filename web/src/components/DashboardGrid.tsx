@@ -3,19 +3,10 @@ import { Button, message } from 'antd';
 import { PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import RGL, { WidthProvider } from 'react-grid-layout/legacy';
 import { api } from '../api';
-import type { Dashboard, Widget, WidgetType } from '../types';
+import type { Dashboard, Widget } from '../types';
 import WidgetCard from './WidgetCard';
 import WidgetEditModal, { type WidgetDraft } from './WidgetEditModal';
-
-// 타입별 기본 크기 (12컬럼 그리드, 1행 = 60px)
-const DEFAULT_SIZE: Record<WidgetType, { w: number; h: number }> = {
-  stat: { w: 3, h: 2 },
-  table: { w: 6, h: 5 },
-  chart: { w: 6, h: 5 },
-  log: { w: 6, h: 5 },
-  text: { w: 4, h: 3 },
-  status: { w: 6, h: 4 },
-};
+import { DEFAULT_WIDGET_SIZE } from './widgets/widgetTypes';
 
 // react-grid-layout v2: 기존 v1 API(draggableCancel 등)는 /legacy 진입점이 제공한다.
 // 새 GridLayout API에는 draggableCancel이 없어 액션 클릭 보호를 위해 legacy를 쓴다.
@@ -38,6 +29,12 @@ export default function DashboardGrid({ dashboard, onChanged, onAnalyze }: Props
     setHighlightId(id);
     setTimeout(() => setHighlightId((cur) => (cur === id ? undefined : cur)), 2500);
   };
+
+  // 위젯 변경을 대시보드 전체 저장으로 영속화하는 공통 경로 (저장→재동기화→실패 시 에러 토스트).
+  const saveWidgets = (widgets: Widget[], failMsg: string, afterSave?: () => void) =>
+    api.saveDashboard({ ...dashboard, widgets })
+      .then(() => { onChanged(); afterSave?.(); })
+      .catch((e) => void message.error(`${failMsg}: ${(e as Error).message}`));
   const layout = useMemo<RglItem[]>(
     () => dashboard.widgets.map((w) => ({ i: w.id, ...w.layout })),
     [dashboard],
@@ -57,18 +54,11 @@ export default function DashboardGrid({ dashboard, onChanged, onAnalyze }: Props
       const item = next.find((x) => x.i === w.id);
       return item ? { ...w, layout: { x: item.x, y: item.y, w: item.w, h: item.h } } : w;
     });
-    api.saveDashboard({ ...dashboard, widgets })
-      .then(() => onChanged())
-      .catch((e) => void message.error(`레이아웃 저장 실패: ${(e as Error).message}`));
+    void saveWidgets(widgets, '레이아웃 저장 실패');
   };
 
   const removeWidget = (widgetId: string) => {
-    api.saveDashboard({
-      ...dashboard,
-      widgets: dashboard.widgets.filter((w) => w.id !== widgetId),
-    })
-      .then(() => onChanged())
-      .catch((e) => void message.error(`위젯 삭제 실패: ${(e as Error).message}`));
+    void saveWidgets(dashboard.widgets.filter((w) => w.id !== widgetId), '위젯 삭제 실패');
   };
 
   const changeRefresh = (widgetId: string, refreshSec?: number) => {
@@ -77,17 +67,13 @@ export default function DashboardGrid({ dashboard, onChanged, onAnalyze }: Props
         ? { ...w, dataSource: { ...w.dataSource, refreshSec } }
         : w,
     );
-    api.saveDashboard({ ...dashboard, widgets })
-      .then(() => onChanged())
-      .catch((e) => void message.error(`갱신 주기 변경 실패: ${(e as Error).message}`));
+    void saveWidgets(widgets, '갱신 주기 변경 실패');
   };
 
   // 위젯 내부 상호작용(컬럼 폭 조절 등)으로 바뀐 display만 저장
   const changeDisplay = (widgetId: string, display: Record<string, unknown>) => {
     const widgets = dashboard.widgets.map((w) => (w.id === widgetId ? { ...w, display } : w));
-    api.saveDashboard({ ...dashboard, widgets })
-      .then(() => onChanged())
-      .catch((e) => void message.error(`표시 설정 저장 실패: ${(e as Error).message}`));
+    void saveWidgets(widgets, '표시 설정 저장 실패');
   };
 
   // 편집: id·layout은 유지하고 나머지를 드래프트로 교체 (dataSource/alert 제거도 반영)
@@ -95,9 +81,7 @@ export default function DashboardGrid({ dashboard, onChanged, onAnalyze }: Props
     const widgets = dashboard.widgets.map((w) =>
       w.id === widgetId ? { id: w.id, layout: w.layout, ...draft } : w,
     );
-    api.saveDashboard({ ...dashboard, widgets })
-      .then(() => onChanged())
-      .catch((e) => void message.error(`위젯 수정 실패: ${(e as Error).message}`));
+    void saveWidgets(widgets, '위젯 수정 실패');
   };
 
   // 12컬럼 그리드에서 기존 위젯과 겹치지 않는 가장 위쪽 빈 자리를 찾는다 (없으면 맨 아래)
@@ -124,27 +108,17 @@ export default function DashboardGrid({ dashboard, onChanged, onAnalyze }: Props
       title: `${source.title} (복사)`,
       layout: { ...findFreePosition(source.layout.w, source.layout.h), w: source.layout.w, h: source.layout.h },
     };
-    api.saveDashboard({ ...dashboard, widgets: [...dashboard.widgets, copy] })
-      .then(() => {
-        onChanged();
-        flashHighlight(copy.id);
-      })
-      .catch((e) => void message.error(`위젯 복제 실패: ${(e as Error).message}`));
+    void saveWidgets([...dashboard.widgets, copy], '위젯 복제 실패', () => flashHighlight(copy.id));
   };
 
   const addWidget = (draft: WidgetDraft) => {
-    const size = DEFAULT_SIZE[draft.type];
+    const size = DEFAULT_WIDGET_SIZE[draft.type];
     const widget: Widget = {
       id: crypto.randomUUID(),
       layout: { ...findFreePosition(size.w, size.h), ...size },
       ...draft,
     };
-    api.saveDashboard({ ...dashboard, widgets: [...dashboard.widgets, widget] })
-      .then(() => {
-        onChanged();
-        flashHighlight(widget.id);
-      })
-      .catch((e) => void message.error(`위젯 추가 실패: ${(e as Error).message}`));
+    void saveWidgets([...dashboard.widgets, widget], '위젯 추가 실패', () => flashHighlight(widget.id));
   };
 
   return (

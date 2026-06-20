@@ -5,70 +5,58 @@ async function json<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
+function get<T>(url: string): Promise<T> {
+  return fetch(url).then((r) => json<T>(r));
+}
+// body 없는 POST(승인/거절 등)는 Content-Type을 붙이지 않는다 — 빈 본문 + application/json은 Fastify가 거부한다.
+function post<T>(url: string, body?: unknown): Promise<T> {
+  const init: RequestInit = { method: 'POST' };
+  if (body !== undefined) {
+    init.headers = JSON_HEADERS;
+    init.body = JSON.stringify(body);
+  }
+  return fetch(url, init).then((r) => json<T>(r));
+}
+function put<T>(url: string, body: unknown): Promise<T> {
+  return fetch(url, { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify(body) }).then((r) => json<T>(r));
+}
+function del<T>(url: string): Promise<T> {
+  return fetch(url, { method: 'DELETE' }).then((r) => json<T>(r));
+}
+
 export const api = {
-  listDashboards: () => fetch('/api/dashboards').then((r) => json<Dashboard[]>(r)),
-  getDashboard: (id: string) => fetch(`/api/dashboards/${id}`).then((r) => json<Dashboard>(r)),
-  createDashboard: (name: string) =>
-    fetch('/api/dashboards', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    }).then((r) => json<Dashboard>(r)),
-  saveDashboard: (dashboard: Dashboard) =>
-    fetch(`/api/dashboards/${dashboard.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(dashboard),
-    }).then((r) => json<{ ok: boolean }>(r)),
-  deleteDashboard: (id: string) =>
-    fetch(`/api/dashboards/${id}`, { method: 'DELETE' }).then((r) => json<{ ok: boolean }>(r)),
+  listDashboards: () => get<Dashboard[]>('/api/dashboards'),
+  getDashboard: (id: string) => get<Dashboard>(`/api/dashboards/${id}`),
+  createDashboard: (name: string) => post<Dashboard>('/api/dashboards', { name }),
+  saveDashboard: (dashboard: Dashboard) => put<{ ok: boolean }>(`/api/dashboards/${dashboard.id}`, dashboard),
+  deleteDashboard: (id: string) => del<{ ok: boolean }>(`/api/dashboards/${id}`),
 
-  widgetData: (ds: WidgetDataSource) =>
-    fetch('/api/widget-data', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(ds),
-    }).then((r) => json<CommandResult>(r)),
+  widgetData: (ds: WidgetDataSource) => post<CommandResult>('/api/widget-data', ds),
 
-  listCommands: () => fetch('/api/commands').then((r) => json<CommandTemplate[]>(r)),
+  listCommands: () => get<CommandTemplate[]>('/api/commands'),
 
-  exportData: () => fetch('/api/export').then((r) => json<unknown>(r)),
-  pgProfiles: () => fetch('/api/pg-profiles').then((r) => json<string[]>(r)),
+  exportData: () => get<unknown>('/api/export'),
+  pgProfiles: () => get<string[]>('/api/pg-profiles'),
   addPgProfile: (name: string, connString: string) =>
-    fetch('/api/pg-profiles', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, connString }),
-    }).then((r) => json<{ added: string }>(r)),
-  httpProfiles: () => fetch('/api/http-profiles').then((r) => json<string[]>(r)),
+    post<{ added: string }>('/api/pg-profiles', { name, connString }),
+  httpProfiles: () => get<string[]>('/api/http-profiles'),
   addHttpProfile: (name: string, headers: Record<string, string>) =>
-    fetch('/api/http-profiles', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, headers }),
-    }).then((r) => json<{ added: string }>(r)),
+    post<{ added: string }>('/api/http-profiles', { name, headers }),
   commandLog: (limit = 200) =>
-    fetch(`/api/command-log?limit=${limit}`).then((r) =>
-      json<{ ts: string; argv: string[]; ok: boolean; exitCode: number | null; durationMs: number }[]>(r),
+    get<{ ts: string; argv: string[]; ok: boolean; exitCode: number | null; durationMs: number }[]>(
+      `/api/command-log?limit=${limit}`,
     ),
   importData: (bundle: unknown) =>
-    fetch('/api/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(bundle),
-    }).then((r) => json<{ dashboards: number; commands: number; skipped: string[] }>(r)),
+    post<{ dashboards: number; commands: number; skipped: string[] }>('/api/import', bundle),
 
-  clearChatSession: (sessionId: string) =>
-    fetch(`/api/chat/session/${sessionId}`, { method: 'DELETE' }).then((r) => json<{ ok: boolean }>(r)),
+  clearChatSession: (sessionId: string) => del<{ ok: boolean }>(`/api/chat/session/${sessionId}`),
 
   confirmCommand: (pendingId: string) =>
-    fetch(`/api/commands/pending/${pendingId}/confirm`, { method: 'POST' }).then((r) =>
-      json<{ registered: string; applied: number; errors: string[] }>(r),
-    ),
+    post<{ registered: string; applied: number; errors: string[] }>(`/api/commands/pending/${pendingId}/confirm`),
   rejectCommand: (pendingId: string) =>
-    fetch(`/api/commands/pending/${pendingId}/reject`, { method: 'POST' }).then((r) =>
-      json<{ rejected: boolean }>(r),
-    ),
+    post<{ rejected: boolean }>(`/api/commands/pending/${pendingId}/reject`),
 };
 
 // POST 기반 SSE: fetch 스트림에서 'data: {...}\n\n' 청크를 파싱해 이벤트 콜백.
