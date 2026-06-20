@@ -44,6 +44,7 @@ npm run app:build  # 패키징 (electron/release/)
 - 커밋: 한글 Conventional (`기능:`/`버그수정:`/`빌드:`/`보안수정:` …), 기능 단위 분리
 - 주석은 한글, "왜"를 설명
 - web과 server의 `types.ts`는 수동 동기화 — 한쪽 바꾸면 반드시 양쪽
+  (`server/test/typesSync.test.ts`가 공유 도메인 타입 드리프트를 검출. ChatEvent는 web이 'done'을 더 가져 제외)
 - react-grid-layout은 v2의 `/legacy` 진입점 사용 (draggableCancel 필요)
 - electron 버전은 **고정값**(범위 금지 — electron-builder 26 요구)
 
