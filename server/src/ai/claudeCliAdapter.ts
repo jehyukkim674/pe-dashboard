@@ -5,12 +5,13 @@ import type { PgProfiles } from '../datasources/pgProfiles.js';
 import type { DataSourceRegistry } from '../datasources/registry.js';
 import type { CommandResult, Dashboard } from '../types.js';
 import { runArgv } from '../commands/runner.js';
-import { readAuditLog } from '../commands/auditLog.js';
+import { readAuditLog, maskSecrets } from '../commands/auditLog.js';
 import { ResultCache } from '../commands/resultCache.js';
 import type { ToolKit } from './tools.js';
 import type { ChatAdapter, ChatContext, ChatEvent } from './adapter.js';
-import { applyOperations, type Operation } from './operations.js';
+import { applyOperations } from './operations.js';
 import type { ExecStream } from './claudeStream.js';
+import { extractReplyText, extractJson, type InspectRequest, type ParsedResponse } from './streamingJson.js';
 
 const CLI_TIMEOUT_MS = 120_000;
 const MAX_HISTORY_TURNS = 10;
@@ -25,8 +26,6 @@ const MAX_AGENT_ROUNDS = 3;
 const MAX_INSPECTS_PER_ROUND = 4;
 const INSPECT_MAX_CHARS = 1_500;
 const INSPECT_TOOLS = new Set(['run_command_preview', 'list_commands', 'list_dashboards']);
-
-interface InspectRequest { tool?: string; input?: unknown }
 
 // 읽기 전용 도구만 승인 없이 허용하고, 파일 변경·임의 명령 실행 도구는 차단한다.
 // -p(print) 모드에서 allowedTools에 없는 도구는 권한 프롬프트 없이 거부되므로
@@ -104,7 +103,7 @@ export class ClaudeCliAdapter implements ChatAdapter {
       }
 
       const envelopeText = (result.json as { result?: string } | undefined)?.result ?? result.stdout;
-      let parsed: { reply?: string; operations?: Operation[]; inspect?: InspectRequest[] };
+      let parsed: ParsedResponse;
       try {
         parsed = extractJson(envelopeText);
       } catch (e) {
@@ -327,7 +326,8 @@ export class ClaudeCliAdapter implements ChatAdapter {
             ? result.stdout || (result.json !== undefined ? JSON.stringify(result.json) : '')
             : `(조회 실패: category=${result.diagnosis?.category ?? 'unknown'} — ${result.error ?? '알 수 없는 오류'}` +
               (result.stderr ? `\n  stderr: ${result.stderr.slice(0, 300)}` : '') + ')';
-          return `[위젯 "${w.title}"]\n${raw.slice(0, WIDGET_DATA_MAX_CHARS)}`;
+          // 위젯 출력도 프롬프트로 가므로 비밀값을 가린다 (화면 표시는 마스킹하지 않음)
+          return `[위젯 "${w.title}"]\n${maskSecrets(raw).slice(0, WIDGET_DATA_MAX_CHARS)}`;
         } catch (e) {
           return `[위젯 "${w.title}"]\n(실행 불가: ${e instanceof Error ? e.message : String(e)})`;
         }
@@ -350,57 +350,5 @@ export class ClaudeCliAdapter implements ChatAdapter {
   }
 }
 
-// 스트리밍 중인 모델 출력(완성 전 JSON 문자열)에서 지금까지의 reply 값만 언이스케이프해 뽑는다.
-// 표시 전용 — operations는 최종 완성 텍스트를 extractJson으로 파싱해 적용하므로 여기 정확성은 무관.
-export function extractReplyText(partial: string): string {
-  const s = partial.replace(/^\s*```(?:json)?\s*/i, '');
-  const m = /"reply"\s*:\s*"/.exec(s);
-  if (!m) return '';
-  let out = '';
-  for (let i = m.index + m[0].length; i < s.length; i++) {
-    const ch = s[i];
-    if (ch === '"') break; // reply 문자열의 끝
-    if (ch !== '\\') {
-      out += ch;
-      continue;
-    }
-    if (i + 1 >= s.length) break; // 백슬래시가 마지막 — 미완성 이스케이프, 다음 청크를 기다린다
-    const next = s[i + 1];
-    const simple: Record<string, string> = {
-      n: '\n', t: '\t', r: '\r', '"': '"', '\\': '\\', '/': '/', b: '\b', f: '\f',
-    };
-    if (next === 'u') {
-      const hex = s.slice(i + 2, i + 6);
-      if (hex.length < 4) break; // 미완성 \uXXXX
-      out += /^[0-9a-fA-F]{4}$/.test(hex) ? String.fromCharCode(parseInt(hex, 16)) : next;
-      i += /^[0-9a-fA-F]{4}$/.test(hex) ? 5 : 1;
-    } else {
-      out += simple[next] ?? next;
-      i += 1;
-    }
-  }
-  return out;
-}
-
-// 코드펜스(```json ... ```)나 앞뒤 잡설이 섞여 있어도 JSON 객체를 찾아 파싱한다.
-// 잡설에 '{'가 섞인 경우를 대비해, 각 '{' 후보 위치에서 마지막 '}'까지 파싱을 시도한다.
-export function extractJson(
-  text: string,
-): { reply?: string; operations?: Operation[]; inspect?: InspectRequest[] } {
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
-  const candidate = fenced ? fenced[1] : text;
-  const end = candidate.lastIndexOf('}');
-  let start = candidate.indexOf('{');
-  while (start >= 0 && start < end) {
-    try {
-      return JSON.parse(candidate.slice(start, end + 1)) as {
-        reply?: string;
-        operations?: Operation[];
-        inspect?: InspectRequest[];
-      };
-    } catch {
-      start = candidate.indexOf('{', start + 1);
-    }
-  }
-  throw new Error('JSON 객체를 찾지 못했습니다');
-}
+// 응답 파싱(스트리밍/최종)은 streamingJson 모듈로 분리. 기존 import 경로 호환을 위해 재노출한다.
+export { extractReplyText, extractJson } from './streamingJson.js';

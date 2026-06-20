@@ -77,6 +77,22 @@ describe('AI tools', () => {
     expect(preview.stdout.length).toBeLessThanOrEqual(2000);
   });
 
+  it('run_command_preview masks secrets in stdout before returning to AI', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'tools-mask-'));
+    const commands = new CommandRegistry(path.join(dir, 'commands.json'));
+    await commands.load();
+    await commands.register({
+      id: 'leak', description: 'test',
+      argv: ['node', '-e', 'console.log("token=abcdef123456")'], params: [],
+    });
+    const kit = buildTools({ store, commands, pending });
+    const preview = (await kit.handlers.run_command_preview({
+      commandId: 'leak', params: {},
+    })) as { stdout: string };
+    expect(preview.stdout).not.toContain('abcdef123456');
+    expect(preview.stdout).toContain('***');
+  });
+
   it('register_command queues pending confirmation instead of registering', async () => {
     const result = (await tools.handlers.register_command({
       id: 'kubectl_ctx',

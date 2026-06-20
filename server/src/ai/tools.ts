@@ -4,7 +4,9 @@ import { type CommandRegistry, validateTemplate } from '../commands/registry.js'
 import { assessArgv } from '../commands/safety.js';
 import type { PendingCommands } from '../commands/pending.js';
 import { runArgv } from '../commands/runner.js';
+import { maskSecrets } from '../commands/auditLog.js';
 import type { Widget } from '../types.js';
+import { CAPABILITIES, MUTATING_CAPABILITIES } from './capabilities.js';
 
 export interface ToolContext {
   store: DashboardStore;
@@ -19,163 +21,10 @@ export interface ToolKit {
   handlers: Record<string, (input: any) => Promise<unknown>>;
 }
 
-const layoutSchema = {
-  type: 'object' as const,
-  properties: {
-    x: { type: 'number' }, y: { type: 'number' },
-    w: { type: 'number' }, h: { type: 'number' },
-  },
-  required: ['x', 'y', 'w', 'h'],
-};
-
-const dataSourceSchema = {
-  type: 'object' as const,
-  properties: {
-    kind: { type: 'string', enum: ['cli', 'http', 'postgres'] },
-    commandId: { type: 'string' },
-    params: { type: 'object', additionalProperties: { type: 'string' } },
-    url: { type: 'string' },
-    profile: { type: 'string' },
-    query: { type: 'string' },
-    refreshSec: { type: 'number' },
-  },
-  required: ['kind', 'commandId', 'params'],
-};
-
-const widgetSchema = {
-  type: 'object' as const,
-  properties: {
-    type: { type: 'string', enum: ['stat', 'table', 'chart', 'log', 'text', 'status'] },
-    title: { type: 'string' },
-    layout: layoutSchema,
-    dataSource: dataSourceSchema,
-    display: { type: 'object' },
-  },
-  required: ['type', 'title', 'layout'],
-};
-
-// 조회 전용 모드에서 차단되는 변경성 도구. 새 변경성 도구를 추가하면 여기에도 등록한다.
-const MUTATING_TOOLS = new Set([
-  'create_dashboard', 'delete_dashboard', 'add_widget', 'update_widget',
-  'remove_widget', 'set_alert', 'register_command',
-]);
-
-const alertSchema = {
-  type: 'object' as const,
-  properties: {
-    on: { type: 'string', enum: ['fail', 'contains'] },
-    pattern: { type: 'string', description: 'on=contains일 때 출력에서 찾을 문자열' },
-  },
-  required: ['on'],
-};
-
-// 확장 포인트: 이 배열에 정의+핸들러 쌍을 추가하면 AI 능력이 늘어난다.
+// 능력의 외부 계약(정의·변경성·요약)은 capabilities.ts가 단일 출처로 갖고,
+// 여기서는 실행(handler)만 정의한 뒤 이름으로 맞춰 조립한다.
+// 확장: 능력을 추가하려면 capabilities.ts 엔트리 + 아래 handler를 함께 추가한다(이름 1:1).
 export function buildTools(ctx: ToolContext, opts: { readOnly?: boolean } = {}): ToolKit {
-  const definitions: Anthropic.Tool[] = [
-    {
-      name: 'list_dashboards',
-      description: '모든 대시보드와 위젯 목록을 조회한다.',
-      input_schema: { type: 'object', properties: {} },
-    },
-    {
-      name: 'create_dashboard',
-      description: '새 대시보드를 만든다.',
-      input_schema: {
-        type: 'object',
-        properties: { name: { type: 'string', description: '대시보드 이름' } },
-        required: ['name'],
-      },
-    },
-    {
-      name: 'delete_dashboard',
-      description: '대시보드를 삭제한다.',
-      input_schema: {
-        type: 'object',
-        properties: { id: { type: 'string' } },
-        required: ['id'],
-      },
-    },
-    {
-      name: 'add_widget',
-      description: '대시보드에 위젯을 추가한다. dataSource.commandId는 list_commands에 있는 것만 사용.',
-      input_schema: {
-        type: 'object',
-        properties: { dashboardId: { type: 'string' }, widget: widgetSchema },
-        required: ['dashboardId', 'widget'],
-      },
-    },
-    {
-      name: 'update_widget',
-      description: '위젯의 일부 필드만 수정한다 (title, layout, dataSource, display).',
-      input_schema: {
-        type: 'object',
-        properties: {
-          dashboardId: { type: 'string' },
-          widgetId: { type: 'string' },
-          patch: { type: 'object' },
-        },
-        required: ['dashboardId', 'widgetId', 'patch'],
-      },
-    },
-    {
-      name: 'remove_widget',
-      description: '위젯을 삭제한다.',
-      input_schema: {
-        type: 'object',
-        properties: { dashboardId: { type: 'string' }, widgetId: { type: 'string' } },
-        required: ['dashboardId', 'widgetId'],
-      },
-    },
-    {
-      name: 'set_alert',
-      description:
-        "위젯에 조건 알림을 설정한다. on='fail'은 명령 실패 시, on='contains'는 출력에 pattern 포함 시 알림. " +
-        '알림을 끄려면 alert를 null로 보낸다.',
-      input_schema: {
-        type: 'object',
-        properties: {
-          dashboardId: { type: 'string' },
-          widgetId: { type: 'string' },
-          alert: { anyOf: [alertSchema, { type: 'null' }] },
-        },
-        required: ['dashboardId', 'widgetId', 'alert'],
-      },
-    },
-    {
-      name: 'list_commands',
-      description: '위젯 dataSource로 사용 가능한 CLI 명령 템플릿 목록을 조회한다.',
-      input_schema: { type: 'object', properties: {} },
-    },
-    {
-      name: 'run_command_preview',
-      description: '명령을 1회 실행해 출력 구조를 확인한다. 위젯 구성 전 출력 형태가 불확실할 때 사용.',
-      input_schema: {
-        type: 'object',
-        properties: {
-          commandId: { type: 'string' },
-          params: { type: 'object', additionalProperties: { type: 'string' } },
-        },
-        required: ['commandId', 'params'],
-      },
-    },
-    {
-      name: 'register_command',
-      description:
-        '새 CLI 명령 템플릿 등록을 요청한다. 사용자가 채팅창에서 승인해야 실제 등록된다. ' +
-        'argv는 ["gh","run","list","--repo","{repo}"]처럼 인자 배열이며 {param} 자리표시자를 쓴다.',
-      input_schema: {
-        type: 'object',
-        properties: {
-          id: { type: 'string' },
-          description: { type: 'string' },
-          argv: { type: 'array', items: { type: 'string' } },
-          params: { type: 'array', items: { type: 'string' } },
-        },
-        required: ['id', 'description', 'argv', 'params'],
-      },
-    },
-  ];
-
   const handlers: ToolKit['handlers'] = {
     list_dashboards: async () => ctx.store.list(),
 
@@ -222,7 +71,8 @@ export function buildTools(ctx: ToolContext, opts: { readOnly?: boolean } = {}):
       return {
         ok: result.ok,
         error: result.error,
-        stdout: result.stdout.slice(0, 2000),
+        // stdout은 AI(프롬프트)로 가므로 비밀값을 가린다 (stderr는 runner가 이미 마스킹)
+        stdout: maskSecrets(result.stdout).slice(0, 2000),
         isJson: result.json !== undefined,
       };
     },
@@ -247,6 +97,15 @@ export function buildTools(ctx: ToolContext, opts: { readOnly?: boolean } = {}):
     },
   };
 
+  // 카탈로그(외부 계약)와 핸들러(구현)가 정확히 1:1인지 보장 — 한쪽만 추가하면 즉시 드러난다.
+  const catalogNames = CAPABILITIES.map((c) => c.name).sort().join(',');
+  const handlerNames = Object.keys(handlers).sort().join(',');
+  if (catalogNames !== handlerNames) {
+    throw new Error(`capability/handler 불일치: catalog=[${catalogNames}] handlers=[${handlerNames}]`);
+  }
+
+  const definitions = CAPABILITIES.map((c) => c.definition);
+
   if (opts.readOnly) {
     // 정의에서 변경성 도구를 숨기고, 핸들러는 차단 메시지를 던지도록 교체한다
     // (모델이 그래도 변경을 시도하는 경우의 이중 방어).
@@ -254,9 +113,9 @@ export function buildTools(ctx: ToolContext, opts: { readOnly?: boolean } = {}):
       throw new Error('조회 전용 모드: 변경 작업이 비활성화되어 있습니다 (서버 환경변수 AI_READONLY=false로 해제 가능)');
     };
     return {
-      definitions: definitions.filter((d) => !MUTATING_TOOLS.has(d.name)),
+      definitions: definitions.filter((d) => !MUTATING_CAPABILITIES.has(d.name)),
       handlers: Object.fromEntries(
-        Object.entries(handlers).map(([name, h]) => [name, MUTATING_TOOLS.has(name) ? blocked : h]),
+        Object.entries(handlers).map(([name, h]) => [name, MUTATING_CAPABILITIES.has(name) ? blocked : h]),
       ),
     };
   }
