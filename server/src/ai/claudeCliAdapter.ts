@@ -12,6 +12,7 @@ import type { ChatAdapter, ChatContext, ChatEvent } from './adapter.js';
 import { applyOperations } from './operations.js';
 import type { ExecStream } from './claudeStream.js';
 import { extractReplyText, extractJson, type InspectRequest, type ParsedResponse } from './streamingJson.js';
+import { buildOperationExamples } from './capabilities.js';
 
 const CLI_TIMEOUT_MS = 120_000;
 const MAX_HISTORY_TURNS = 10;
@@ -248,13 +249,7 @@ export class ClaudeCliAdapter implements ChatAdapter {
       : [
           '출력 포맷:',
           '{"reply":"사용자에게 보여줄 한국어 답변","operations":[',
-          '  {"op":"create_dashboard","name":"이름"},',
-          '  {"op":"delete_dashboard","id":"대시보드ID"},',
-          '  {"op":"add_widget","dashboardId":"대시보드ID 또는 $last","widget":{"type":"stat|table|chart|log|text|status","title":"제목","layout":{"x":0,"y":0,"w":3,"h":2},"dataSource":{"kind":"cli","commandId":"명령ID","params":{},"refreshSec":30},"display":{}}},',
-          '  {"op":"update_widget","dashboardId":"...","widgetId":"...","patch":{}},',
-          '  {"op":"remove_widget","dashboardId":"...","widgetId":"..."},',
-          '  {"op":"set_alert","dashboardId":"...","widgetId":"...","alert":{"on":"fail"|"contains","pattern":"포함문자열"}},',
-          '  {"op":"register_command","id":"...","description":"...","argv":["cmd","{param}"],"params":["param"]}',
+          ...buildOperationExamples(),
           ']}',
           '',
           '규칙:',

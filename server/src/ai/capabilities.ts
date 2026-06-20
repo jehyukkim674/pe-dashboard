@@ -16,6 +16,9 @@ export interface Capability {
   definition: Anthropic.Tool;
   // 도구 호출을 채팅 액션 칩에 표시할 한국어 한 줄 요약.
   describe: (input: unknown) => string;
+  // 변경성 능력의 프롬프트 출력 예시(operations[] 한 항목, 들여쓰기·쉼표 없는 원형).
+  // claudeCliAdapter 프롬프트가 이 값들을 모아 operations 예시 블록을 생성한다.
+  promptExample?: string;
 }
 
 const layoutSchema = {
@@ -89,6 +92,7 @@ export const CAPABILITIES: Capability[] = [
         required: ['name'],
       },
     },
+    promptExample: '{"op":"create_dashboard","name":"이름"}',
     describe: (input) => `대시보드 '${String(rec(input)['name'])}' 생성`,
   },
   {
@@ -103,6 +107,7 @@ export const CAPABILITIES: Capability[] = [
         required: ['id'],
       },
     },
+    promptExample: '{"op":"delete_dashboard","id":"대시보드ID"}',
     describe: (input) => `대시보드 삭제 (${String(rec(input)['id'])})`,
   },
   {
@@ -117,6 +122,7 @@ export const CAPABILITIES: Capability[] = [
         required: ['dashboardId', 'widget'],
       },
     },
+    promptExample: '{"op":"add_widget","dashboardId":"대시보드ID 또는 $last","widget":{"type":"stat|table|chart|log|text|status","title":"제목","layout":{"x":0,"y":0,"w":3,"h":2},"dataSource":{"kind":"cli","commandId":"명령ID","params":{},"refreshSec":30},"display":{}}}',
     describe: (input) => `위젯 '${String((rec(input)['widget'] as Record<string, unknown>)?.['title'])}' 추가`,
   },
   {
@@ -135,6 +141,7 @@ export const CAPABILITIES: Capability[] = [
         required: ['dashboardId', 'widgetId', 'patch'],
       },
     },
+    promptExample: '{"op":"update_widget","dashboardId":"...","widgetId":"...","patch":{}}',
     describe: (input) => `위젯 수정 (${String(rec(input)['widgetId'])})`,
   },
   {
@@ -149,6 +156,7 @@ export const CAPABILITIES: Capability[] = [
         required: ['dashboardId', 'widgetId'],
       },
     },
+    promptExample: '{"op":"remove_widget","dashboardId":"...","widgetId":"..."}',
     describe: (input) => `위젯 삭제 (${String(rec(input)['widgetId'])})`,
   },
   {
@@ -169,6 +177,7 @@ export const CAPABILITIES: Capability[] = [
         required: ['dashboardId', 'widgetId', 'alert'],
       },
     },
+    promptExample: '{"op":"set_alert","dashboardId":"...","widgetId":"...","alert":{"on":"fail"|"contains","pattern":"포함문자열"}}',
     describe: () => byName('set_alert'),
   },
   {
@@ -217,6 +226,7 @@ export const CAPABILITIES: Capability[] = [
         required: ['id', 'description', 'argv', 'params'],
       },
     },
+    promptExample: '{"op":"register_command","id":"...","description":"...","argv":["cmd","{param}"],"params":["param"]}',
     describe: (input) => `명령 '${String(rec(input)['id'])}' 등록 요청`,
   },
 ];
@@ -231,4 +241,11 @@ export const MUTATING_CAPABILITIES = new Set(
 // 도구 호출을 채팅 액션 칩용 한국어 한 줄 요약으로 변환한다. 미등록 이름은 이름 그대로.
 export function describeCapability(name: string, input: unknown): string {
   return BY_NAME.get(name)?.describe(input) ?? name;
+}
+
+// claudeCliAdapter 프롬프트의 operations 예시 줄을 카탈로그에서 생성한다(변경성 능력 추가 시 자동 반영).
+// 출력은 기존 하드코딩 텍스트와 동일 — capabilities.test의 골든 스냅샷이 보증한다.
+export function buildOperationExamples(): string[] {
+  const examples = CAPABILITIES.filter((c) => c.mutating && c.promptExample).map((c) => c.promptExample!);
+  return examples.map((e, i) => `  ${e}${i < examples.length - 1 ? ',' : ''}`);
 }
