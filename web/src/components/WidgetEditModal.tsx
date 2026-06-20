@@ -3,6 +3,7 @@ import { Form, Input, Modal, Select, Typography, message } from 'antd';
 import { api } from '../api';
 import type { CommandTemplate, Widget, WidgetAlert, WidgetType } from '../types';
 import { TABLE_PREF_KEYS } from './widgets/tableFormat';
+import { WIDGET_TYPE_OPTIONS } from './widgets/widgetTypes';
 
 // 저장 대상: id/layout은 그리드가 관리하므로 제외
 export type WidgetDraft = Omit<Widget, 'id' | 'layout'>;
@@ -12,15 +13,6 @@ interface Props {
   onClose: () => void;
   onSave: (draft: WidgetDraft) => void;
 }
-
-const TYPE_OPTIONS: { value: WidgetType; label: string }[] = [
-  { value: 'stat', label: 'Stat (숫자 하나)' },
-  { value: 'table', label: 'Table (표)' },
-  { value: 'chart', label: 'Chart (차트)' },
-  { value: 'log', label: 'Log (텍스트 출력)' },
-  { value: 'status', label: 'Status (상태 타일 그리드)' },
-  { value: 'text', label: 'Text (메모)' },
-];
 
 // 위젯이 실행할 데이터 소스(CLI 명령/HTTP)와 표시 옵션을 한 곳에서 편집한다.
 // 열릴 때마다 새로 마운트되므로(부모에서 조건부 렌더) 상태는 props로 초기화한다.
@@ -191,7 +183,7 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 최근 커밋" />
         </Form.Item>
         <Form.Item label="타입">
-          <Select value={type} onChange={setType} options={TYPE_OPTIONS} />
+          <Select value={type} onChange={setType} options={WIDGET_TYPE_OPTIONS} />
         </Form.Item>
 
         {type !== 'text' && (

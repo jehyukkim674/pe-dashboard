@@ -1,25 +1,15 @@
 import type { CommandResult } from '../../types';
-
-interface Display {
-  labelPath?: string; // 타일 라벨로 쓸 JSON 경로 (예: metadata.name)
-  statePath?: string; // 상태 값 경로 (예: status.sync.status)
-  okValues?: string;  // 정상으로 간주할 값들 (쉼표 구분, 예: Synced,Healthy)
-}
-
-function getPath(obj: unknown, dotted: string): unknown {
-  return dotted.split('.').reduce<unknown>(
-    (acc, key) => (acc && typeof acc === 'object' ? (acc as Record<string, unknown>)[key] : undefined),
-    obj,
-  );
-}
+import type { StatusDisplay } from './widgetTypes';
+import { getPath } from '../../utils/json';
+import { asRows } from '../../utils/commandResult';
 
 // JSON 배열을 초록/빨강 상태 타일 그리드로 표시 (ArgoCD 앱 상태 등 모니터링용)
 export default function StatusWidget({ result, display }: {
   result?: CommandResult;
   display?: Record<string, unknown>;
 }) {
-  const d = (display ?? {}) as Display;
-  const rows = Array.isArray(result?.json) ? (result.json as unknown[]) : [];
+  const d = (display ?? {}) as StatusDisplay;
+  const rows = asRows<unknown>(result);
   if (!d.labelPath || !d.statePath) return <div>상태 그리드 설정(labelPath/statePath)이 필요합니다</div>;
   if (rows.length === 0) return <div>데이터 없음</div>;
 

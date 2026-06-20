@@ -10,6 +10,7 @@ import type { TablePrefs } from './tableFormat';
 import {
   cellText, compare, orderColumns, parseIsoTimestamp, readTablePrefs, statusColor, TABLE_PREF_KEYS, valueAt,
 } from './tableFormat';
+import { asRows } from '../../utils/commandResult';
 
 // 고유값이 적은 컬럼만 필터 메뉴 제공 (해시·이름처럼 전부 제각각이면 검색이 낫다)
 const MAX_FILTER_OPTIONS = 50;
@@ -86,10 +87,7 @@ export default function TableWidget({ result, display, onDisplayChange }: {
   display?: Record<string, unknown>;
   onDisplayChange?: (display: Record<string, unknown>) => void;
 }) {
-  const rows = useMemo<Record<string, unknown>[]>(
-    () => (Array.isArray(result?.json) ? (result.json as Record<string, unknown>[]) : []),
-    [result],
-  );
+  const rows = useMemo(() => asRows(result), [result]);
   const rawCols = display?.columns;
   const baseColumns = useMemo<string[]>(
     () =>

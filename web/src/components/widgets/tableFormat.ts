@@ -1,10 +1,8 @@
 // TableWidget의 셀 렌더 규칙·컬럼 설정 파싱 — 순수 함수만 모아 테스트하기 쉽게 분리
+import { getPath } from '../../utils/json';
 
 export function valueAt(row: Record<string, unknown>, dotted: string): unknown {
-  return dotted.split('.').reduce<unknown>(
-    (acc, key) => (acc != null && typeof acc === 'object' ? (acc as Record<string, unknown>)[key] : undefined),
-    row,
-  );
+  return getPath(row, dotted);
 }
 
 // 컬럼 클릭 정렬: 양쪽 다 숫자면 수치 비교, 아니면 문자열 비교

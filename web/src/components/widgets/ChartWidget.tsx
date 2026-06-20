@@ -3,8 +3,8 @@ import {
 } from 'recharts';
 import { theme } from 'antd';
 import type { CommandResult } from '../../types';
-
-interface Display { xKey?: string; yKey?: string | string[]; chartType?: 'line' | 'bar'; }
+import type { ChartDisplay } from './widgetTypes';
+import { asRows } from '../../utils/commandResult';
 
 // 여러 시리즈를 구분할 색 팔레트
 const PALETTE = ['#1677ff', '#52c41a', '#faad14', '#eb2f96', '#13c2c2', '#722ed1', '#fa541c'];
@@ -31,8 +31,8 @@ export default function ChartWidget({ result, display }: {
   display?: Record<string, unknown>;
 }) {
   const { token } = theme.useToken();
-  const d = (display ?? {}) as Display;
-  const data = Array.isArray(result?.json) ? (result.json as Record<string, unknown>[]) : [];
+  const d = (display ?? {}) as ChartDisplay;
+  const data = asRows(result);
   const yKeys = parseYKeys(d.yKey);
   if (!d.xKey || yKeys.length === 0) return <div>차트 설정(xKey/yKey)이 필요합니다</div>;
 

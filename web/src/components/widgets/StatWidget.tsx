@@ -2,20 +2,13 @@ import { useEffect, useState } from 'react';
 import { Statistic } from 'antd';
 import { ArrowDownOutlined, ArrowUpOutlined } from '@ant-design/icons';
 import type { CommandResult } from '../../types';
-
-interface Display { metric?: 'count' | 'path'; path?: string; suffix?: string; }
+import type { StatDisplay } from './widgetTypes';
+import { getPath } from '../../utils/json';
 
 // 추세선에 보관하는 최근 수치 개수 (위젯당 localStorage ~1KB)
 const MAX_POINTS = 40;
 
 interface Point { t: number; v: number; }
-
-function resolvePath(obj: unknown, path: string): unknown {
-  return path.split('.').reduce<unknown>(
-    (acc, key) => (acc != null && typeof acc === 'object' ? (acc as Record<string, unknown>)[key] : undefined),
-    obj,
-  );
-}
 
 function loadSeries(key: string): Point[] {
   try {
@@ -56,10 +49,10 @@ export default function StatWidget({ result, display, widgetId, updatedAt }: {
   widgetId?: string; // 추세 저장 키 (없으면 추세/스파크라인 비활성)
   updatedAt?: number; // 폴링 시각 — 같은 값이라도 1회당 1점 기록하기 위함
 }) {
-  const d = (display ?? {}) as Display;
+  const d = (display ?? {}) as StatDisplay;
   let value: unknown = '—';
   if (result?.json !== undefined) {
-    if (d.metric === 'path' && d.path) value = resolvePath(result.json, d.path);
+    if (d.metric === 'path' && d.path) value = getPath(result.json, d.path);
     else if (Array.isArray(result.json)) value = result.json.length;
     else value = JSON.stringify(result.json).slice(0, 30);
   } else if (result) {
