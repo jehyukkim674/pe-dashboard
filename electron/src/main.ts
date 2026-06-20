@@ -1,20 +1,24 @@
 import { app, BrowserWindow, dialog, ipcMain, type Rectangle } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { startServer } from '../../server/src/start.js';
 import { checkUpdateStatus, openReleasePage, restartToUpdate, startInstall } from './updater.js';
 import { createSplashWindow } from './splash.js';
 
+const execFileAsync = promisify(execFile);
+
 // Finder/독에서 실행된 앱은 셸 PATH(.zprofile 등)를 상속받지 못해
 // claude·gh·argocd 같은 CLI를 찾지 못한다. 로그인 셸의 PATH로 보정한다.
-function fixGuiPath(): void {
+// 동기 스폰은 시작(스플래시 표시 포함)을 막으므로 비동기로 바꿔 서버 부팅과 겹친다.
+async function fixGuiPath(): Promise<void> {
   try {
     const shell = process.env.SHELL ?? '/bin/zsh';
-    const shellPath = execFileSync(shell, ['-lc', 'echo -n "$PATH"'], {
+    const { stdout } = await execFileAsync(shell, ['-lc', 'echo -n "$PATH"'], {
       encoding: 'utf8', timeout: 5_000,
     });
-    if (shellPath.includes('/')) process.env.PATH = shellPath;
+    if (stdout.includes('/')) process.env.PATH = stdout;
   } catch {
     // 로그인 셸 실패 시 아래 흔한 경로 추가로 폴백
   }
@@ -40,15 +44,17 @@ function loadBounds(): Partial<Rectangle> {
 }
 
 async function createWindow(): Promise<void> {
-  fixGuiPath();
-
-  // 부팅 동안 빈 창 대신 스플래시를 즉시 띄우고, 본 창은 콘텐츠가 준비될 때 보여준다
+  // 스플래시를 가장 먼저 띄운다(멈춘 듯한 빈 시간 제거). PATH 보정은 동기 스폰 대신 비동기로
+  // 시작해 서버 부팅과 겹치고, 창 로드(=첫 CLI 실행) 전에만 완료되면 된다.
   const splash = createSplashWindow();
+  splash.setStage(15, '환경 준비 중…');
+  const pathReady = fixGuiPath();
+
   let splashDone = false;
   const finishSplash = () => {
     if (splashDone) return;
     splashDone = true;
-    if (!splash.isDestroyed()) splash.close();
+    if (!splash.window.isDestroyed()) splash.window.close();
     if (win && !win.isDestroyed() && !win.isVisible()) win.show();
   };
 
@@ -83,16 +89,20 @@ async function createWindow(): Promise<void> {
     const devUrl = process.env.ELECTRON_START_URL;
     if (devUrl) {
       // 개발 모드: 서버·Vite는 별도 프로세스(npm run app:dev)로 이미 떠 있다
+      void pathReady; // dev 서버가 별도로 PATH를 가지므로 여기선 기다리지 않는다
       await win.loadURL(devUrl);
       return;
     }
 
     // 프로덕션: 같은 프로세스에서 Fastify 기동, web/dist는 extraResources로 동봉
+    splash.setStage(45, '서버 시작 중…');
     const { port } = await startServer({
       dataDir: path.join(app.getPath('userData'), 'data'),
       staticDir: path.join(process.resourcesPath, 'web'),
       preferredPort: 5174,
     });
+    await pathReady; // 위젯 폴링(=CLI 실행) 전에 PATH 보정 완료 보장
+    splash.setStage(80, '화면 불러오는 중…');
     await win.loadURL(`http://127.0.0.1:${port}`);
   } catch (err) {
     finishSplash(); // 실패해도 스플래시를 닫아 사용자가 멈춘 화면에 갇히지 않게 한다
