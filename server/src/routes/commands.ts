@@ -16,7 +16,10 @@ export function commandRoutes(
   // 최근 실행된 명령 감사 로그 (최신이 마지막)
   app.get('/api/command-log', async (req) => {
     const { limit } = req.query as { limit?: string };
-    return readAuditLog(Math.min(Number(limit) || 100, 1000));
+    // 음수/NaN이 1000 상한을 우회해 로그 전체를 반환하지 못하도록 1~1000으로 클램프한다
+    const n = Number(limit);
+    const safe = Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 1000) : 100;
+    return readAuditLog(safe);
   });
 
   app.post('/api/commands/pending/:id/confirm', async (req, reply) => {

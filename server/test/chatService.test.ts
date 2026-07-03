@@ -129,6 +129,27 @@ describe('ChatService', () => {
     expect(events.at(-1)).toEqual({ type: 'text', text: '복구됨' });
   });
 
+  it('이미 중단된 signal이면 API를 호출하지 않고 조용히 종료한다', async () => {
+    const { service, create } = await makeService([
+      { stop_reason: 'end_turn', content: [{ type: 'text', text: 'x' }] },
+    ]);
+    const ac = new AbortController();
+    ac.abort();
+    const { events, emit } = collectEvents();
+    await expect(service.chat('s1', 'x', emit, { signal: ac.signal })).resolves.toBeUndefined();
+    expect(create).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
+  });
+
+  it('signal을 Anthropic 호출 옵션으로 전달한다', async () => {
+    const { service, create } = await makeService([
+      { stop_reason: 'end_turn', content: [{ type: 'text', text: 'hi' }] },
+    ]);
+    const ac = new AbortController();
+    await service.chat('s1', 'x', () => {}, { signal: ac.signal });
+    expect(create.mock.calls[0][1]).toEqual({ signal: ac.signal });
+  });
+
   it('executes multiple tool_use blocks from one response', async () => {
     const { service, store } = await makeService([
       {

@@ -52,6 +52,7 @@ export class SecretProfileStore<T extends NamedProfile> {
   }
 
   private async persist(): Promise<void> {
-    await writeJsonAtomic(this.file, this.profiles);
+    // 연결 문자열·인증 헤더 같은 비밀이 담기므로 소유자만 읽고 쓰게(0600) 저장한다
+    await writeJsonAtomic(this.file, this.profiles, 0o600);
   }
 }

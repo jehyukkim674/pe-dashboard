@@ -4,7 +4,7 @@ import type { CommandRegistry } from '../commands/registry.js';
 import type { CommandTemplate } from '../types.js';
 import type { ToolKit } from './tools.js';
 import { describeToolCall } from './describe.js';
-import type { ChatAdapter, ChatEvent } from './adapter.js';
+import type { ChatAdapter, ChatContext, ChatEvent } from './adapter.js';
 export type { ChatEvent } from './adapter.js';
 
 interface Deps {
@@ -27,22 +27,36 @@ export class ChatService implements ChatAdapter {
     this.sessions.delete(sessionId);
   }
 
-  async chat(sessionId: string, userMessage: string, emit: (e: ChatEvent) => void): Promise<void> {
+  async chat(
+    sessionId: string,
+    userMessage: string,
+    emit: (e: ChatEvent) => void,
+    context?: ChatContext,
+  ): Promise<void> {
+    const signal = context?.signal;
     const history = this.sessions.get(sessionId) ?? [];
     this.sessions.set(sessionId, history);
     this.trimHistory(history);
-    const snapshot = history.length; // 실패 시 이 길이로 롤백
+    const snapshot = history.length; // 실패·중단 시 이 길이로 롤백
     history.push({ role: 'user', content: userMessage });
 
     try {
       for (let turn = 0; turn < MAX_TURNS; turn++) {
-        const response = await this.deps.client.messages.create({
-          model: process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-6',
-          max_tokens: 4096,
-          system: await this.systemPrompt(),
-          tools: this.deps.tools.definitions,
-          messages: [...history],
-        });
+        // 클라이언트가 끊었으면(새 메시지·드로어 닫기) 미완성 턴을 되돌리고 조용히 종료
+        if (signal?.aborted) {
+          history.length = snapshot;
+          return;
+        }
+        const response = await this.deps.client.messages.create(
+          {
+            model: process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-6',
+            max_tokens: 4096,
+            system: await this.systemPrompt(),
+            tools: this.deps.tools.definitions,
+            messages: [...history],
+          },
+          { signal },
+        );
 
         history.push({ role: 'assistant', content: response.content });
         for (const block of response.content) {
@@ -64,7 +78,8 @@ export class ChatService implements ChatAdapter {
       }
       emit({ type: 'error', message: `도구 호출이 ${MAX_TURNS}회를 초과해 중단했습니다.` });
     } catch (e) {
-      history.length = snapshot; // API 실패 시 미완성 턴 제거 (세션 보존)
+      history.length = snapshot; // API 실패·중단 시 미완성 턴 제거 (세션 보존)
+      if (signal?.aborted) return; // 사용자 취소는 에러로 올리지 않는다
       throw e;
     }
   }

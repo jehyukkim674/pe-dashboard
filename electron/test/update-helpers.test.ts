@@ -2,6 +2,35 @@ import { describe, it, expect } from 'vitest';
 import { classifyBundlePath } from '../src/update-helpers.js';
 import { pickArm64ZipUrl } from '../src/update-helpers.js';
 import { buildSwapScript } from '../src/update-helpers.js';
+import { parseShellPath, sanitizeWindowBounds } from '../src/update-helpers.js';
+
+describe('parseShellPath', () => {
+  it('센티널 사이의 PATH만 뽑는다(앞의 배너·경고 무시)', () => {
+    const out = parseShellPath('nvm: v20\n__PE_PATH_START__/opt/homebrew/bin:/usr/bin__PE_PATH_END__');
+    expect(out).toBe('/opt/homebrew/bin:/usr/bin');
+  });
+  it('마커가 없으면 undefined(폴백 유도)', () => {
+    expect(parseShellPath('/opt/homebrew/bin:/usr/bin')).toBeUndefined();
+  });
+  it("'/'가 없는 빈 값이면 undefined", () => {
+    expect(parseShellPath('__PE_PATH_START__X__PE_PATH_END__')).toBeUndefined();
+  });
+});
+
+describe('sanitizeWindowBounds', () => {
+  const displays = [{ x: 0, y: 0, width: 1920, height: 1080 }];
+  it('작업영역과 겹치는 위치는 그대로 유지', () => {
+    const b = { x: 100, y: 100, width: 800, height: 600 };
+    expect(sanitizeWindowBounds(b, displays)).toEqual(b);
+  });
+  it('화면 밖(사라진 외부 모니터) 위치는 버리고 크기만 남긴다', () => {
+    expect(sanitizeWindowBounds({ x: 3000, y: 200, width: 800, height: 600 }, displays))
+      .toEqual({ width: 800, height: 600 });
+  });
+  it('좌표가 없으면 크기만 반환', () => {
+    expect(sanitizeWindowBounds({ width: 800, height: 600 }, displays)).toEqual({ width: 800, height: 600 });
+  });
+});
 
 describe('classifyBundlePath', () => {
   it('쓰기 가능하고 일반 경로면 custom', () => {

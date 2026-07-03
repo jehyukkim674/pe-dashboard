@@ -45,4 +45,11 @@ describe('StatWidget sparkline/trend persistence', () => {
     const { container } = render(<StatWidget result={countResult(3)} display={{ metric: 'count' }} />);
     expect(container.querySelector('svg polyline')).toBeNull();
   });
+
+  it('비유한값(Infinity)은 수치로 기록하지 않는다(스파크라인 오염 방지)', () => {
+    const infResult: CommandResult = { ok: true, exitCode: 0, stdout: 'Infinity', stderr: '' };
+    render(<StatWidget result={infResult} display={{}} widgetId="w-inf" updatedAt={1000} />);
+    const series = JSON.parse(localStorage.getItem('pe-spark-w-inf') ?? '[]') as unknown[];
+    expect(series).toHaveLength(0);
+  });
 });

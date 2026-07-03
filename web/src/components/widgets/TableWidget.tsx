@@ -77,9 +77,11 @@ function computeFilterOptions(rows: Record<string, unknown>[], key: string) {
   return values.map((v) => ({ text: v === '' ? '(빈 값)' : v, value: v }));
 }
 
-// CSV 셀 이스케이프: 쉼표·따옴표·줄바꿈이 있으면 따옴표로 감싸고 내부 따옴표는 2배
-function csvCell(s: string): string {
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+// CSV 셀 이스케이프: 쉼표·따옴표·줄바꿈이 있으면 따옴표로 감싸고 내부 따옴표는 2배.
+// 또한 =,+,-,@ 로 시작하는 값은 스프레드시트가 수식으로 해석(수식 인젝션)하므로 앞에 '를 붙여 무력화한다.
+export function csvCell(s: string): string {
+  const guarded = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+  return /[",\n]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
 }
 
 export default function TableWidget({ result, display, onDisplayChange }: {

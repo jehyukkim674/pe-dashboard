@@ -1,10 +1,11 @@
-import { app, BrowserWindow, dialog, ipcMain, type Rectangle } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, screen, type Rectangle } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { startServer } from '../../server/src/start.js';
 import { checkUpdateStatus, openReleasePage, restartToUpdate, startInstall } from './updater.js';
+import { parseShellPath, sanitizeWindowBounds } from './update-helpers.js';
 import { createSplashWindow } from './splash.js';
 
 const execFileAsync = promisify(execFile);
@@ -15,10 +16,14 @@ const execFileAsync = promisify(execFile);
 async function fixGuiPath(): Promise<void> {
   try {
     const shell = process.env.SHELL ?? '/bin/zsh';
-    const { stdout } = await execFileAsync(shell, ['-lc', 'echo -n "$PATH"'], {
-      encoding: 'utf8', timeout: 5_000,
-    });
-    if (stdout.includes('/')) process.env.PATH = stdout;
+    // 값을 센티널로 감싸 출력해, 로그인 셸이 찍는 배너·경고가 PATH에 섞이지 않게 한다
+    const { stdout } = await execFileAsync(
+      shell,
+      ['-lc', 'printf "__PE_PATH_START__%s__PE_PATH_END__" "$PATH"'],
+      { encoding: 'utf8', timeout: 5_000 },
+    );
+    const parsed = parseShellPath(stdout);
+    if (parsed) process.env.PATH = parsed;
   } catch {
     // 로그인 셸 실패 시 아래 흔한 경로 추가로 폴백
   }
@@ -58,10 +63,17 @@ async function createWindow(): Promise<void> {
     if (win && !win.isDestroyed() && !win.isVisible()) win.show();
   };
 
+  // 저장된 위치가 현재 디스플레이 배치에서 화면 밖이면(외부 모니터 분리 등) 위치를 버리고
+  // 크기만 복원해 창이 안 보이는 상태를 막는다. screen은 app ready 이후 사용 가능.
+  const safeBounds = sanitizeWindowBounds(
+    loadBounds(),
+    screen.getAllDisplays().map((disp) => disp.workArea),
+  );
+
   win = new BrowserWindow({
     width: 1600,
     height: 1000,
-    ...loadBounds(),
+    ...safeBounds,
     minWidth: 720,
     minHeight: 480,
     show: false, // 콘텐츠 준비 후 finishSplash에서 표시 (흰 화면 깜빡임 방지)

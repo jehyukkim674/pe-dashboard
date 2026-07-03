@@ -63,7 +63,9 @@ export default function StatWidget({ result, display, widgetId, updatedAt }: {
       ? JSON.stringify(value).slice(0, 30)
       : String(value ?? '—');
   const num = Number(text);
-  const isNum = text !== '' && !Number.isNaN(num);
+  // Number.isFinite로 판정한다: 'Infinity'/'-Infinity'/'1e400' 같은 값은 !isNaN을 통과해
+  // 스파크라인 추세를 무한대로 오염시키므로 유한한 수만 수치로 인정한다.
+  const isNum = text !== '' && Number.isFinite(num);
 
   // 폴링마다 수치를 링버퍼에 누적·영구 저장 (리로드해도 추세 유지).
   // 마지막 점의 폴링 시각(updatedAt)으로 중복을 막아, 리로드 직후 같은 틱을 또 기록하지 않는다.
