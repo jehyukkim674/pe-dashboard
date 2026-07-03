@@ -4,13 +4,14 @@ export type WidgetType = 'stat' | 'table' | 'chart' | 'log' | 'text' | 'status';
 export interface WidgetLayout { x: number; y: number; w: number; h: number; }
 
 export interface WidgetDataSource {
-  kind: 'cli' | 'http' | 'postgres';
+  kind: 'cli' | 'http' | 'postgres' | 'ssh';
   commandId: string; // http/postgres일 때는 빈 문자열
   params: Record<string, string>;
   url?: string; // kind=http 전용
   httpProfile?: string; // kind=http: 인증 헤더 프로필 이름 (헤더 값은 서버에만 저장)
   profile?: string; // kind=postgres: 연결 프로필 이름 (연결 문자열은 서버에만 저장)
   query?: string; // kind=postgres: SELECT 쿼리
+  sshProfile?: string; // kind=ssh: 원격 접속 프로필 이름 (commandId 명령을 원격에서 실행)
   refreshSec?: number;
 }
 

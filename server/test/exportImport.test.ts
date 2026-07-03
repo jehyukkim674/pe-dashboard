@@ -9,6 +9,7 @@ import { CommandRegistry } from '../src/commands/registry.js';
 import { PendingCommands } from '../src/commands/pending.js';
 import { PgProfiles } from '../src/datasources/pgProfiles.js';
 import { HttpProfiles } from '../src/datasources/httpProfiles.js';
+import { SshProfiles } from '../src/datasources/sshProfiles.js';
 import { DataSourceRegistry } from '../src/datasources/registry.js';
 import { buildTools } from '../src/ai/tools.js';
 import { ClaudeCliAdapter } from '../src/ai/claudeCliAdapter.js';
@@ -30,6 +31,7 @@ describe('export/import routes', () => {
       tools: toolkit,
       pgProfiles: new PgProfiles('/tmp/pe-test-pg-profiles.json'),
       httpProfiles: new HttpProfiles('/tmp/pe-test-http-profiles.json'),
+      sshProfiles: new SshProfiles('/tmp/pe-test-ssh-profiles.json'),
       dataSources: new DataSourceRegistry(),
       chatService: new ClaudeCliAdapter({ store, commands, toolkit }),
     });

@@ -44,6 +44,9 @@ export const api = {
   httpProfiles: () => get<string[]>('/api/http-profiles'),
   addHttpProfile: (name: string, headers: Record<string, string>) =>
     post<{ added: string }>('/api/http-profiles', { name, headers }),
+  sshProfiles: () => get<string[]>('/api/ssh-profiles'),
+  addSshProfile: (name: string, host: string, user?: string, port?: number) =>
+    post<{ added: string }>('/api/ssh-profiles', { name, host, user, port }),
   commandLog: (limit = 200) =>
     get<{ ts: string; argv: string[]; ok: boolean; exitCode: number | null; durationMs: number }[]>(
       `/api/command-log?limit=${limit}`,

@@ -17,6 +17,8 @@ import { HttpSource } from './datasources/httpSource.js';
 import { HttpProfiles } from './datasources/httpProfiles.js';
 import { PgProfiles } from './datasources/pgProfiles.js';
 import { PostgresSource } from './datasources/postgresSource.js';
+import { SshProfiles } from './datasources/sshProfiles.js';
+import { SshSource } from './datasources/sshSource.js';
 import { buildTools } from './ai/tools.js';
 import { ChatService } from './ai/chatService.js';
 import { ClaudeCliAdapter } from './ai/claudeCliAdapter.js';
@@ -51,11 +53,14 @@ export async function startServer(
   await pgProfiles.load();
   const httpProfiles = new HttpProfiles(path.join(opts.dataDir, 'http-profiles.json'));
   await httpProfiles.load();
+  const sshProfiles = new SshProfiles(path.join(opts.dataDir, 'ssh-profiles.json'));
+  await sshProfiles.load();
 
   const dataSources = new DataSourceRegistry();
   dataSources.register(new CliSource(commands, commandCache));
   dataSources.register(new HttpSource(httpProfiles));
   dataSources.register(new PostgresSource(pgProfiles));
+  dataSources.register(new SshSource(commands, sshProfiles, commandCache));
 
   // AI_READONLY=true면 조회 전용 모드: AI는 데이터 조회·질문 응답만 가능하고
   // 대시보드 생성·수정·삭제·명령 등록이 차단된다. 기본은 편집 허용.
@@ -71,7 +76,7 @@ export async function startServer(
           readOnly: aiReadOnly, cache: commandCache, execStream: runClaudeStream,
         });
 
-  const app = await buildApp({ store, commands, pending, dataSources, chatService, tools, pgProfiles, httpProfiles });
+  const app = await buildApp({ store, commands, pending, dataSources, chatService, tools, pgProfiles, httpProfiles, sshProfiles });
 
   if (opts.staticDir) {
     await fs.access(path.join(opts.staticDir, 'index.html')).catch(() => {

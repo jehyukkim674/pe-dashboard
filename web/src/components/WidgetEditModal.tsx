@@ -23,7 +23,10 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
   const [templates, setTemplates] = useState<CommandTemplate[]>([]);
   const [title, setTitle] = useState(widget?.title ?? '');
   const [type, setType] = useState<WidgetType>(widget?.type ?? 'table');
-  const [sourceKind, setSourceKind] = useState<'cli' | 'http' | 'postgres'>(ds?.kind ?? 'cli');
+  const [sourceKind, setSourceKind] = useState<'cli' | 'http' | 'postgres' | 'ssh'>(ds?.kind ?? 'cli');
+  const [sshNames, setSshNames] = useState<string[]>([]);
+  const [sshProfile, setSshProfile] = useState(ds?.sshProfile ?? '');
+  const [newSshProfile, setNewSshProfile] = useState<{ name: string; host: string; user: string; port: string }>();
   const [pgNames, setPgNames] = useState<string[]>([]);
   const [pgProfile, setPgProfile] = useState(ds?.profile ?? '');
   const [pgQuery, setPgQuery] = useState(ds?.query ?? '');
@@ -60,7 +63,26 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
       .catch((e) => void message.error(`명령 목록 조회 실패: ${(e as Error).message}`));
     api.pgProfiles().then(setPgNames).catch(() => {});
     api.httpProfiles().then(setHttpNames).catch(() => {});
+    api.sshProfiles().then(setSshNames).catch(() => {});
   }, []);
+
+  const addSshProfile = async () => {
+    if (!newSshProfile?.name.trim() || !newSshProfile.host.trim()) {
+      return void message.warning('이름과 host를 입력하세요');
+    }
+    const portNum = newSshProfile.port.trim() ? Number(newSshProfile.port.trim()) : undefined;
+    try {
+      await api.addSshProfile(
+        newSshProfile.name.trim(), newSshProfile.host.trim(),
+        newSshProfile.user.trim() || undefined, portNum,
+      );
+      setSshNames(await api.sshProfiles());
+      setSshProfile(newSshProfile.name.trim());
+      setNewSshProfile(undefined);
+    } catch (e) {
+      void message.error((e as Error).message);
+    }
+  };
 
   // 헤더 텍스트("Authorization: Bearer xxx" 줄마다)를 Record로 파싱
   const parseHeaders = (text: string): Record<string, string> => {
@@ -116,6 +138,39 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
     [pgQuery],
   );
 
+  // CLI·SSH가 공유하는 '명령 템플릿 + 파라미터' 입력 블록 (SSH는 이 명령을 원격에서 실행)
+  const commandBlock = (
+    <>
+      <Form.Item label="명령 템플릿" required>
+        <Select
+          value={commandId || undefined} onChange={setCommandId}
+          placeholder="명령 선택"
+          options={templates.map((t) => ({ value: t.id, label: `${t.id} — ${t.description}` }))}
+          showSearch optionFilterProp="label"
+        />
+      </Form.Item>
+      {template?.params.map((p) => (
+        <Form.Item key={p} label={`파라미터: ${p}`} required>
+          <Input
+            value={params[p] ?? ''}
+            onChange={(e) => setParams((prev) => ({ ...prev, [p]: e.target.value }))}
+            placeholder={`{${p}} 값`}
+          />
+        </Form.Item>
+      ))}
+      {resolved && (
+        <Form.Item label="실제 실행되는 명령">
+          <Typography.Paragraph
+            code copyable
+            style={{ marginBottom: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
+          >
+            {resolved}
+          </Typography.Paragraph>
+        </Form.Item>
+      )}
+    </>
+  );
+
   const buildDisplay = (): Record<string, unknown> | undefined => {
     const rp = rowsPath.trim() ? { rowsPath: rowsPath.trim() } : {};
     switch (type) {
@@ -148,13 +203,16 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
     const draft: WidgetDraft = { type, title: title.trim(), display: buildDisplay() };
 
     if (type !== 'text') {
-      if (sourceKind === 'cli') {
+      if (sourceKind === 'cli' || sourceKind === 'ssh') {
+        if (sourceKind === 'ssh' && !sshProfile) return void message.warning('SSH 프로필을 선택하세요');
         if (!template) return void message.warning('명령 템플릿을 선택하세요');
         const missing = template.params.filter((p) => !params[p]?.trim());
         if (missing.length > 0) return void message.warning(`파라미터를 입력하세요: ${missing.join(', ')}`);
         const next: Record<string, string> = {};
         for (const p of template.params) next[p] = params[p].trim();
-        draft.dataSource = { kind: 'cli', commandId, params: next, refreshSec: ds?.refreshSec };
+        draft.dataSource = sourceKind === 'ssh'
+          ? { kind: 'ssh', commandId, params: next, sshProfile, refreshSec: ds?.refreshSec }
+          : { kind: 'cli', commandId, params: next, refreshSec: ds?.refreshSec };
       } else if (sourceKind === 'http') {
         if (!/^https?:\/\//.test(url.trim())) return void message.warning('http(s):// URL을 입력하세요');
         draft.dataSource = {
@@ -204,38 +262,58 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
             <Form.Item label="데이터 소스">
               <Select
                 value={sourceKind} onChange={setSourceKind}
-                options={[{ value: 'cli', label: 'CLI 명령' }, { value: 'http', label: 'HTTP(JSON API)' }, { value: 'postgres', label: 'Postgres (SELECT)' }]}
+                options={[
+                  { value: 'cli', label: 'CLI 명령' },
+                  { value: 'ssh', label: 'SSH 원격 명령' },
+                  { value: 'http', label: 'HTTP(JSON API)' },
+                  { value: 'postgres', label: 'Postgres (SELECT)' },
+                ]}
               />
             </Form.Item>
             {sourceKind === 'cli' ? (
+              commandBlock
+            ) : sourceKind === 'ssh' ? (
               <>
-                <Form.Item label="명령 템플릿" required>
+                <Form.Item label="SSH 프로필" required>
                   <Select
-                    value={commandId || undefined} onChange={setCommandId}
-                    placeholder="명령 선택"
-                    options={templates.map((t) => ({ value: t.id, label: `${t.id} — ${t.description}` }))}
-                    showSearch optionFilterProp="label"
+                    value={sshProfile || undefined} onChange={setSshProfile} placeholder="프로필 선택"
+                    options={sshNames.map((n) => ({ value: n, label: n }))}
+                    popupRender={(menu) => (
+                      <>
+                        {menu}
+                        <div style={{ padding: 6 }}>
+                          <a onClick={() => setNewSshProfile({ name: '', host: '', user: '', port: '' })}>+ 새 프로필 등록</a>
+                        </div>
+                      </>
+                    )}
                   />
                 </Form.Item>
-                {template?.params.map((p) => (
-                  <Form.Item key={p} label={`파라미터: ${p}`} required>
+                {newSshProfile && (
+                  <Form.Item label="새 SSH 프로필 (키·설정은 ~/.ssh 사용)">
                     <Input
-                      value={params[p] ?? ''}
-                      onChange={(e) => setParams((prev) => ({ ...prev, [p]: e.target.value }))}
-                      placeholder={`{${p}} 값`}
+                      value={newSshProfile.name} placeholder="이름 (예: bastion)"
+                      onChange={(e) => setNewSshProfile({ ...newSshProfile, name: e.target.value })}
+                      style={{ marginBottom: 6 }}
                     />
-                  </Form.Item>
-                ))}
-                {resolved && (
-                  <Form.Item label="실제 실행되는 명령">
-                    <Typography.Paragraph
-                      code copyable
-                      style={{ marginBottom: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
-                    >
-                      {resolved}
-                    </Typography.Paragraph>
+                    <Input
+                      value={newSshProfile.host} placeholder="host (예: 10.0.0.5 또는 bastion.example.com)"
+                      onChange={(e) => setNewSshProfile({ ...newSshProfile, host: e.target.value })}
+                      style={{ marginBottom: 6 }}
+                    />
+                    <Input
+                      value={newSshProfile.user} placeholder="user (선택)"
+                      onChange={(e) => setNewSshProfile({ ...newSshProfile, user: e.target.value })}
+                      style={{ marginBottom: 6 }}
+                    />
+                    <Input
+                      value={newSshProfile.port} placeholder="port (선택, 기본 22)"
+                      onChange={(e) => setNewSshProfile({ ...newSshProfile, port: e.target.value })}
+                      style={{ marginBottom: 6 }}
+                    />
+                    <a onClick={() => void addSshProfile()}>등록</a>
                   </Form.Item>
                 )}
+                {commandBlock}
               </>
             ) : sourceKind === 'http' ? (
               <>

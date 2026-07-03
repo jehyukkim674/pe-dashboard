@@ -13,8 +13,10 @@ import { chatRoutes } from './routes/chat.js';
 import { exportImportRoutes } from './routes/exportImport.js';
 import { pgProfileRoutes } from './routes/pgProfiles.js';
 import { httpProfileRoutes } from './routes/httpProfiles.js';
+import { sshProfileRoutes } from './routes/sshProfiles.js';
 import type { PgProfiles } from './datasources/pgProfiles.js';
 import type { HttpProfiles } from './datasources/httpProfiles.js';
+import type { SshProfiles } from './datasources/sshProfiles.js';
 
 export interface AppDeps {
   store: DashboardStore;
@@ -25,6 +27,7 @@ export interface AppDeps {
   tools: ToolKit;
   pgProfiles: PgProfiles;
   httpProfiles: HttpProfiles;
+  sshProfiles: SshProfiles;
 }
 
 // 로컬 전용 앱: 브라우저에서 온 요청은 localhost/127.0.0.1 출처만 허용한다.
@@ -53,5 +56,6 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   exportImportRoutes(app, deps.store, deps.commands);
   pgProfileRoutes(app, deps.pgProfiles);
   httpProfileRoutes(app, deps.httpProfiles);
+  sshProfileRoutes(app, deps.sshProfiles);
   return app;
 }
