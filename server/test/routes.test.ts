@@ -97,6 +97,29 @@ describe('routes', () => {
     expect(res.json().error).toMatch(/kind/);
   });
 
+  it('PUT /api/dashboards/:id rejects malformed body with 400 and does not corrupt store', async () => {
+    const created = await app.inject({ method: 'POST', url: '/api/dashboards', payload: { name: '원본' } });
+    const { id } = created.json();
+    const bad = await app.inject({
+      method: 'PUT', url: `/api/dashboards/${id}`,
+      payload: { name: 123, widgets: 'nope' }, // 스키마 위반
+    });
+    expect(bad.statusCode).toBe(400);
+    // 원본은 그대로 읽혀야 한다 (부분 손상 없음)
+    const got = await app.inject({ method: 'GET', url: `/api/dashboards/${id}` });
+    expect(got.statusCode).toBe(200);
+    expect(got.json().name).toBe('원본');
+  });
+
+  it('confirm이 중복 id로 register 실패해도 409를 주고 대기 항목을 잃지 않는다', async () => {
+    await deps.commands.register({ id: 'dup', description: 'd', argv: ['echo', 'x'], params: [] });
+    const pid = deps.pending.add({ id: 'dup', description: 'd2', argv: ['echo', 'y'], params: [] });
+    const res = await app.inject({ method: 'POST', url: `/api/commands/pending/${pid}/confirm` });
+    expect(res.statusCode).toBe(409);
+    // 대기 항목이 소비되지 않아 다시 조회 가능해야 한다
+    expect(deps.pending.get(pid)).toBeDefined();
+  });
+
   it('pending command confirm registers template; reject discards', async () => {
     const template = { id: 'c1', description: 'd', argv: ['echo', 'x'], params: [] };
     const p1 = deps.pending.add(template);

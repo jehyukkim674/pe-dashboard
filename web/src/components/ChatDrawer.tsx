@@ -168,11 +168,17 @@ export default function ChatDrawer({
     }
   };
 
-  // 외부에서 주입된 프롬프트('AI 분석' 등)를 한 번 자동 전송한다 (중복 전송 방지)
-  const injectedRef = useRef<string>(undefined);
+  // 외부에서 주입된 프롬프트('AI 분석' 등)를 한 번 자동 전송한다 (중복 전송 방지).
+  // 부모는 소비 후 injectedPrompt를 undefined로 비운다 — 이때 ref도 리셋해야
+  // 같은 문구('AI 분석'은 항상 동일 상수)로 다시 눌러도 전송된다.
+  const injectedRef = useRef(false);
   useEffect(() => {
-    if (!injectedPrompt || busy || injectedRef.current === injectedPrompt) return;
-    injectedRef.current = injectedPrompt;
+    if (!injectedPrompt) {
+      injectedRef.current = false; // 소비 완료 — 다음 주입을 받을 수 있게 리셋
+      return;
+    }
+    if (busy || injectedRef.current) return;
+    injectedRef.current = true;
     void send(injectedPrompt);
     onInjectedConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -354,6 +360,9 @@ export default function ChatDrawer({
               }
             }}
             onPressEnter={(e) => {
+              // 한글 IME 조합 확정용 Enter(isComposing)는 전송하지 않는다 —
+              // 조합 중 Enter로 글자를 확정하려던 것이 메시지 전송으로 오작동하는 것을 막는다.
+              if (e.nativeEvent.isComposing) return;
               if (!e.shiftKey) {
                 e.preventDefault();
                 void send();

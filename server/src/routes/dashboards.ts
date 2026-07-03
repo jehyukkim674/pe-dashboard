@@ -1,6 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { DashboardStore } from '../dashboardStore.js';
-import type { Dashboard } from '../types.js';
+import { validateDashboardInput, type DashboardStore } from '../dashboardStore.js';
 
 export function dashboardRoutes(app: FastifyInstance, store: DashboardStore): void {
   app.get('/api/dashboards', async () => store.list());
@@ -22,8 +21,12 @@ export function dashboardRoutes(app: FastifyInstance, store: DashboardStore): vo
   app.put('/api/dashboards/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
     if (!(await store.get(id))) return reply.code(404).send({ error: 'not found' });
-    const dashboard = req.body as Dashboard;
-    await store.save({ ...dashboard, id });
+    try {
+      const validated = validateDashboardInput(req.body);
+      await store.save({ ...validated, id });
+    } catch (e) {
+      return reply.code(400).send({ error: (e as Error).message });
+    }
     return { ok: true };
   });
 

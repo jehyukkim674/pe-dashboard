@@ -21,9 +21,16 @@ export function commandRoutes(
 
   app.post('/api/commands/pending/:id/confirm', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const entry = pending.take(id);
+    // 먼저 소비하지 않고 조회한다. register가 실패해도 대기 항목(과 deferred 위젯 작업)이
+    // 사라지지 않게 하기 위함 — 사용자는 원인을 고쳐 다시 승인할 수 있다.
+    const entry = pending.get(id);
     if (!entry) return reply.code(404).send({ error: 'pending command not found' });
-    await commands.register(entry.template);
+    try {
+      await commands.register(entry.template);
+    } catch (e) {
+      return reply.code(409).send({ error: (e as Error).message });
+    }
+    pending.take(id); // 등록에 성공한 뒤에만 대기 항목을 소비한다
 
     // 이 명령을 전제로 보류해 둔 위젯 작업을 이어서 적용한다
     let applied = 0;

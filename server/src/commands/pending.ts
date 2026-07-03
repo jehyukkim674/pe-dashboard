@@ -22,6 +22,12 @@ export class PendingCommands {
     return this.map.get(id)?.template;
   }
 
+  // 소비하지 않고 항목 전체를 본다. 승인 처리 중 register가 실패하면 되돌릴 수 있게
+  // take() 전에 이걸로 조회한다.
+  get(id: string): PendingEntry | undefined {
+    return this.map.get(id);
+  }
+
   // 승인 대기 명령에 후속 작업을 붙인다. 대기 항목이 없으면 false.
   attach(id: string, operations: unknown[]): boolean {
     const entry = this.map.get(id);

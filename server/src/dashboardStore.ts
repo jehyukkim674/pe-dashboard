@@ -1,8 +1,37 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { Dashboard, Widget } from './types.js';
+import type { Dashboard, Widget, WidgetType } from './types.js';
 import { writeJsonAtomic } from './jsonFile.js';
+
+const WIDGET_TYPES: readonly WidgetType[] = ['stat', 'table', 'chart', 'log', 'text', 'status'];
+
+// PUT /api/dashboards/:id 로 들어오는 본문을 저장 전에 검증한다.
+// 스키마에 맞지 않는 본문이 그대로 저장되면 이후 list()/get() 파싱과 UI 렌더가 깨지므로
+// 여기서 걸러 400으로 돌려보낸다. 성공 시 저장 가능한 Dashboard(id 제외)를 반환한다.
+export function validateDashboardInput(body: unknown): Omit<Dashboard, 'id'> {
+  if (!body || typeof body !== 'object') throw new Error('본문이 객체가 아닙니다');
+  const b = body as Record<string, unknown>;
+  if (typeof b.name !== 'string') throw new Error('name은 문자열이어야 합니다');
+  if (!Array.isArray(b.widgets)) throw new Error('widgets는 배열이어야 합니다');
+  const widgets = b.widgets.map((w, i) => validateWidget(w, i));
+  return { name: b.name, widgets };
+}
+
+function validateWidget(w: unknown, index: number): Widget {
+  if (!w || typeof w !== 'object') throw new Error(`widgets[${index}]가 객체가 아닙니다`);
+  const x = w as Record<string, unknown>;
+  if (typeof x.id !== 'string') throw new Error(`widgets[${index}].id가 없습니다`);
+  if (typeof x.type !== 'string' || !WIDGET_TYPES.includes(x.type as WidgetType)) {
+    throw new Error(`widgets[${index}].type이 올바르지 않습니다: ${String(x.type)}`);
+  }
+  if (typeof x.title !== 'string') throw new Error(`widgets[${index}].title이 없습니다`);
+  const l = x.layout as Record<string, unknown> | undefined;
+  if (!l || ['x', 'y', 'w', 'h'].some((k) => typeof l[k] !== 'number')) {
+    throw new Error(`widgets[${index}].layout이 올바르지 않습니다`);
+  }
+  return x as unknown as Widget;
+}
 
 export class DashboardStore {
   constructor(private readonly dir: string) {}
@@ -26,7 +55,9 @@ export class DashboardStore {
     const dashboards = settled
       .filter((r): r is PromiseFulfilledResult<Dashboard> => r.status === 'fulfilled')
       .map((r) => r.value);
-    return dashboards.sort((a, b) => a.name.localeCompare(b.name));
+    // name이 문자열이 아닌 손상된 파일이 하나라도 있으면 localeCompare가 던져
+    // 목록 전체(/api/dashboards·export·AI list_dashboards)가 죽는다 — 문자열로 강제해 방어한다.
+    return dashboards.sort((a, b) => String(a?.name ?? '').localeCompare(String(b?.name ?? '')));
   }
 
   async get(id: string): Promise<Dashboard | undefined> {

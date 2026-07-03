@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { DashboardStore } from '../src/dashboardStore.js';
+import { DashboardStore, validateDashboardInput } from '../src/dashboardStore.js';
 
 describe('DashboardStore', () => {
   let store: DashboardStore;
@@ -96,5 +96,35 @@ describe('DashboardStore', () => {
         layout: { x: 0, y: 0, w: 1, h: 1 },
       }),
     ).rejects.toThrow(/dashboard not found/);
+  });
+
+  it('list()가 name이 문자열이 아닌 손상 파일 때문에 죽지 않는다', async () => {
+    const good = await store.create('정상');
+    // name이 숫자인 손상된 대시보드 파일을 직접 심는다
+    await writeFile(
+      path.join((store as unknown as { dir: string }).dir, 'broken.json'),
+      JSON.stringify({ id: 'broken', name: 12345, widgets: [] }),
+    );
+    const all = await store.list();
+    // 손상 파일이 있어도 예외 없이 목록을 돌려주고, 정상 항목은 포함된다
+    expect(all.map((d) => d.id)).toContain(good.id);
+  });
+});
+
+describe('validateDashboardInput', () => {
+  const widget = {
+    id: 'w1', type: 'text', title: '메모', layout: { x: 0, y: 0, w: 4, h: 3 },
+  };
+  it('올바른 대시보드 본문을 통과시킨다', () => {
+    expect(() => validateDashboardInput({ name: 'a', widgets: [widget] })).not.toThrow();
+    expect(() => validateDashboardInput({ name: 'a', widgets: [] })).not.toThrow();
+  });
+  it('스키마 위반을 거부한다', () => {
+    expect(() => validateDashboardInput(null)).toThrow(/객체/);
+    expect(() => validateDashboardInput({ name: 1, widgets: [] })).toThrow(/name/);
+    expect(() => validateDashboardInput({ name: 'a', widgets: 'x' })).toThrow(/widgets/);
+    expect(() => validateDashboardInput({ name: 'a', widgets: [{ ...widget, type: 'nope' }] })).toThrow(/type/);
+    expect(() => validateDashboardInput({ name: 'a', widgets: [{ ...widget, layout: { x: 0 } }] })).toThrow(/layout/);
+    expect(() => validateDashboardInput({ name: 'a', widgets: [{ type: 'text', title: 't', layout: widget.layout }] })).toThrow(/id/);
   });
 });

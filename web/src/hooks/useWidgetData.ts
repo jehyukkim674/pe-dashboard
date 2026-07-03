@@ -29,6 +29,10 @@ export function useWidgetData(dataSource?: WidgetDataSource) {
     // 전역 일시정지(pausedRef) 상태면 예약하지 않는다.
     const schedule = () => {
       if (!alive || !dataSource.refreshSec || document.hidden || pausedRef.current) return;
+      // 이전 타이머를 먼저 취소한다. 탭 가시성 토글로 in-flight 로드가 겹치면
+      // 각 로드의 finally가 schedule()을 호출해 타이머가 중첩되는데, 취소 없이 덮어쓰면
+      // 옛 타이머가 계속 살아 폴링 체인이 영구히 복제된다.
+      if (timerRef.current) clearTimeout(timerRef.current);
       const delaySec = backoffDelaySec(dataSource.refreshSec, failures);
       timerRef.current = setTimeout(() => void load(true), delaySec * 1000);
     };

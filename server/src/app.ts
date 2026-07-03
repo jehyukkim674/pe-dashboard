@@ -27,9 +27,25 @@ export interface AppDeps {
   httpProfiles: HttpProfiles;
 }
 
+// 로컬 전용 앱: 브라우저에서 온 요청은 localhost/127.0.0.1 출처만 허용한다.
+// origin 헤더가 없으면(동일 출처 fetch·Electron·비브라우저) 통과. 이렇게 해야
+// 사용자가 방문한 임의의 외부 웹페이지 JS가 127.0.0.1 API를 호출해 명령 실행·DB 조회·
+// 저장된 인증 헤더 응답을 읽어가는 것(CORS 반사)을 막는다.
+export function isAllowedOrigin(origin: string | undefined): boolean {
+  if (!origin) return true; // 동일 출처/비브라우저 요청
+  try {
+    const { hostname } = new URL(origin);
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]';
+  } catch {
+    return false;
+  }
+}
+
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const app = Fastify();
-  await app.register(cors, { origin: true }); // 로컬 전용
+  await app.register(cors, {
+    origin: (origin, cb) => cb(null, isAllowedOrigin(origin)),
+  });
   dashboardRoutes(app, deps.store);
   commandRoutes(app, deps.commands, deps.pending, deps.tools);
   widgetDataRoutes(app, deps.dataSources);
