@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { CommandRegistry } from '../src/commands/registry.js';
@@ -18,6 +18,16 @@ describe('CommandRegistry', () => {
     expect(ids).toContain('gh_run_list');
     expect(ids).toContain('argocd_app_list');
     expect(ids).toContain('port_check');
+  });
+
+  it('손상된(배열 아님) commands.json이어도 list()가 죽지 않고 builtin만 반환한다', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'cmd-'));
+    const file = path.join(dir, 'commands.json');
+    await writeFile(file, '{"not":"an array"}');
+    const reg = new CommandRegistry(file);
+    await reg.load();
+    expect(() => reg.list()).not.toThrow();
+    expect(reg.list().every((t) => t.builtin)).toBe(true);
   });
 
   it('builds argv with substituted params', () => {

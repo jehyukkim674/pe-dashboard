@@ -77,7 +77,9 @@ export class CommandRegistry {
 
   async load(): Promise<void> {
     try {
-      this.custom = JSON.parse(await fs.readFile(this.customFile, 'utf8')) as CommandTemplate[];
+      const parsed = JSON.parse(await fs.readFile(this.customFile, 'utf8'));
+      // 손상 파일이 배열이 아니면 빈 목록으로 — list()의 [...BUILTIN, ...this.custom] 전개가 죽지 않게
+      this.custom = Array.isArray(parsed) ? (parsed as CommandTemplate[]) : [];
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
       this.custom = [];

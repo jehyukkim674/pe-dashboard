@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { SecretProfileStore } from '../src/datasources/secretProfileStore.js';
@@ -22,6 +22,16 @@ describe('SecretProfileStore', () => {
 
   it('loads empty when the file is missing', () => {
     expect(store.names()).toEqual([]);
+  });
+
+  it('손상된(배열 아님) 파일이면 빈 목록으로 로드해 names()가 죽지 않는다', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'sps-'));
+    const file = path.join(dir, 'demo.json');
+    await writeFile(file, '{"corrupt":true}');
+    const s = new SecretProfileStore<Demo>(file, () => {});
+    await s.load();
+    expect(() => s.names()).not.toThrow();
+    expect(s.names()).toEqual([]);
   });
 
   it('adds and exposes only names; get returns the full entry', async () => {

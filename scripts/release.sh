@@ -38,31 +38,37 @@ fi
 echo "▶ git push"
 git push
 
-# 3. 작은 에셋(yml·blockmap)만으로 먼저 생성·게시 — 대용량 업로드 실패가 draft를 만들지 않게
-echo "▶ 릴리스 생성 (메타 + 작은 에셋)"
-gh release create "$TAG" "$YML" "$BLOCKMAP" --title "$TAG" --notes "${NOTES:-$TAG}"
+# 3. 작은 에셋(yml·blockmap)만으로 먼저 'draft'로 생성 — zip 업로드가 끝날 때까지
+#    latest-mac.yml을 공개하지 않는다. 예전엔 여기서 바로 정식 게시해, 게시~zip 업로드 사이에
+#    클라이언트가 새 버전을 발견하고 아직 없는 zip을 받으려다 404로 업데이트가 깨지는 창이 있었다.
+echo "▶ 릴리스 draft 생성 (메타 + 작은 에셋)"
+gh release create "$TAG" "$YML" "$BLOCKMAP" --draft --title "$TAG" --notes "${NOTES:-$TAG}"
 
-# 4. 정식 게시·태그 확인
-DRAFT="$(gh release view "$TAG" --json isDraft --jq .isDraft)"
-if [ "$DRAFT" != "false" ]; then
-  echo "✗ 릴리스가 draft 상태입니다 — gh release edit ${TAG} --draft=false 로 확인 필요" >&2
-  exit 1
-fi
-
-# 5. 대용량 zip 분리 업로드
+# 4. 대용량 zip 분리 업로드 (아직 draft라 클라이언트에 노출되지 않는다)
 echo "▶ zip 업로드 ($(du -h "$ZIP" | cut -f1))"
 gh release upload "$TAG" "$ZIP" --clobber
 
-# 6. 에셋 3종 검증 (자동 업데이트에 zip·blockmap·yml 모두 필요)
+# 5. 에셋 3종 검증 (자동 업데이트에 zip·blockmap·yml 모두 필요)
 COUNT="$(gh release view "$TAG" --json assets --jq '[.assets[].name] | length')"
 if [ "$COUNT" -lt 3 ]; then
-  echo "✗ 에셋이 3개 미만입니다 (${COUNT}개) — 업로드 누락 확인" >&2
+  echo "✗ 에셋이 3개 미만입니다 (${COUNT}개) — 업로드 누락 확인 (draft 유지)" >&2
+  exit 1
+fi
+
+# 6. 모든 에셋이 준비된 뒤에만 정식 게시(draft 해제) — 여기서부터 클라이언트가 업데이트를 본다
+echo "▶ 정식 게시 (draft 해제)"
+gh release edit "$TAG" --draft=false
+DRAFT="$(gh release view "$TAG" --json isDraft --jq .isDraft)"
+if [ "$DRAFT" != "false" ]; then
+  echo "✗ 릴리스가 여전히 draft 상태입니다 — 수동 확인 필요" >&2
   exit 1
 fi
 echo "✓ 릴리스 검증 OK — 에셋 ${COUNT}개, draft=false"
 
-# 7. 로컬 설치
+# 7. 로컬 설치 — 기존 번들을 먼저 지우고 풀어(ditto는 덮어쓰기만 하고 사라진 파일은 안 지움)
+#    이전 버전의 잔재 파일이 번들에 누적되지 않게 한다.
 echo "▶ ~/Applications 설치"
+rm -rf "$HOME/Applications/PE Dashboard.app"
 ditto -x -k "$ZIP" "$HOME/Applications/"
 
 URL="$(gh release view "$TAG" --json url --jq .url)"

@@ -19,7 +19,9 @@ export class SecretProfileStore<T extends NamedProfile> {
 
   async load(): Promise<void> {
     try {
-      this.profiles = JSON.parse(await fs.readFile(this.file, 'utf8')) as T[];
+      const parsed = JSON.parse(await fs.readFile(this.file, 'utf8'));
+      // 파일이 손상돼 배열이 아니면(예: {}) 빈 목록으로 시작한다 — names()/get()의 배열 연산이 죽지 않게
+      this.profiles = Array.isArray(parsed) ? (parsed as T[]) : [];
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
       this.profiles = [];
