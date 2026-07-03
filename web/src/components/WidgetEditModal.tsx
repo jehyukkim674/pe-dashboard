@@ -23,13 +23,14 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
   const [templates, setTemplates] = useState<CommandTemplate[]>([]);
   const [title, setTitle] = useState(widget?.title ?? '');
   const [type, setType] = useState<WidgetType>(widget?.type ?? 'table');
-  const [sourceKind, setSourceKind] = useState<'cli' | 'http' | 'postgres' | 'ssh'>(ds?.kind ?? 'cli');
+  const [sourceKind, setSourceKind] = useState<'cli' | 'http' | 'postgres' | 'ssh' | 'prometheus'>(ds?.kind ?? 'cli');
   const [sshNames, setSshNames] = useState<string[]>([]);
   const [sshProfile, setSshProfile] = useState(ds?.sshProfile ?? '');
   const [newSshProfile, setNewSshProfile] = useState<{ name: string; host: string; user: string; port: string }>();
   const [pgNames, setPgNames] = useState<string[]>([]);
   const [pgProfile, setPgProfile] = useState(ds?.profile ?? '');
   const [pgQuery, setPgQuery] = useState(ds?.query ?? '');
+  const [promQuery, setPromQuery] = useState(ds?.kind === 'prometheus' ? (ds?.query ?? '') : '');
   const [newProfile, setNewProfile] = useState<{ name: string; connString: string }>();
   const [commandId, setCommandId] = useState(ds?.commandId ?? '');
   const [params, setParams] = useState<Record<string, string>>(ds?.params ?? {});
@@ -171,6 +172,42 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
     </>
   );
 
+  // HTTP·Prometheus가 공유하는 인증 헤더 프로필 선택 블록
+  const httpProfileSelect = (
+    <>
+      <Form.Item label="인증 프로필 (선택 — 헤더 값은 서버에만 저장)">
+        <Select
+          value={httpProfile || undefined} onChange={setHttpProfile} placeholder="없음 (익명 GET)"
+          allowClear options={httpNames.map((n) => ({ value: n, label: n }))}
+          popupRender={(menu) => (
+            <>
+              {menu}
+              <div style={{ padding: 6 }}>
+                <a onClick={() => setNewHttpProfile({ name: '', headersText: '' })}>+ 새 프로필 등록</a>
+              </div>
+            </>
+          )}
+        />
+      </Form.Item>
+      {newHttpProfile && (
+        <Form.Item label="새 인증 프로필 (헤더는 줄마다 '이름: 값')">
+          <Input
+            value={newHttpProfile.name} placeholder="이름 (예: internal-api)"
+            onChange={(e) => setNewHttpProfile({ ...newHttpProfile, name: e.target.value })}
+            style={{ marginBottom: 6 }}
+          />
+          <Input.TextArea
+            value={newHttpProfile.headersText} rows={2}
+            placeholder={'Authorization: Bearer xxxxx\nX-Api-Key: yyyyy'}
+            onChange={(e) => setNewHttpProfile({ ...newHttpProfile, headersText: e.target.value })}
+            style={{ marginBottom: 6 }}
+          />
+          <a onClick={() => void addHttpProfile()}>등록</a>
+        </Form.Item>
+      )}
+    </>
+  );
+
   const buildDisplay = (): Record<string, unknown> | undefined => {
     const rp = rowsPath.trim() ? { rowsPath: rowsPath.trim() } : {};
     switch (type) {
@@ -217,6 +254,13 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
         if (!/^https?:\/\//.test(url.trim())) return void message.warning('http(s):// URL을 입력하세요');
         draft.dataSource = {
           kind: 'http', commandId: '', params: {}, url: url.trim(),
+          ...(httpProfile && { httpProfile }), refreshSec: ds?.refreshSec,
+        };
+      } else if (sourceKind === 'prometheus') {
+        if (!/^https?:\/\//.test(url.trim())) return void message.warning('Prometheus 베이스 URL(http(s)://)을 입력하세요');
+        if (!promQuery.trim()) return void message.warning('PromQL 쿼리를 입력하세요');
+        draft.dataSource = {
+          kind: 'prometheus', commandId: '', params: {}, url: url.trim(), query: promQuery.trim(),
           ...(httpProfile && { httpProfile }), refreshSec: ds?.refreshSec,
         };
       } else {
@@ -266,6 +310,7 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
                   { value: 'cli', label: 'CLI 명령' },
                   { value: 'ssh', label: 'SSH 원격 명령' },
                   { value: 'http', label: 'HTTP(JSON API)' },
+                  { value: 'prometheus', label: 'Prometheus (PromQL)' },
                   { value: 'postgres', label: 'Postgres (SELECT)' },
                 ]}
               />
@@ -320,36 +365,20 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
                 <Form.Item label="URL" required>
                   <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://api.example.com/status" />
                 </Form.Item>
-                <Form.Item label="인증 프로필 (선택 — 헤더 값은 서버에만 저장)">
-                  <Select
-                    value={httpProfile || undefined} onChange={setHttpProfile} placeholder="없음 (익명 GET)"
-                    allowClear options={httpNames.map((n) => ({ value: n, label: n }))}
-                    popupRender={(menu) => (
-                      <>
-                        {menu}
-                        <div style={{ padding: 6 }}>
-                          <a onClick={() => setNewHttpProfile({ name: '', headersText: '' })}>+ 새 프로필 등록</a>
-                        </div>
-                      </>
-                    )}
+                {httpProfileSelect}
+              </>
+            ) : sourceKind === 'prometheus' ? (
+              <>
+                <Form.Item label="Prometheus 베이스 URL" required>
+                  <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://prometheus:9090" />
+                </Form.Item>
+                <Form.Item label="PromQL 쿼리" required>
+                  <Input.TextArea
+                    rows={2} value={promQuery} onChange={(e) => setPromQuery(e.target.value)}
+                    placeholder={'up{job="api"}  또는  sum by (status)(rate(http_requests_total[5m]))'}
                   />
                 </Form.Item>
-                {newHttpProfile && (
-                  <Form.Item label="새 인증 프로필 (헤더는 줄마다 '이름: 값')">
-                    <Input
-                      value={newHttpProfile.name} placeholder="이름 (예: internal-api)"
-                      onChange={(e) => setNewHttpProfile({ ...newHttpProfile, name: e.target.value })}
-                      style={{ marginBottom: 6 }}
-                    />
-                    <Input.TextArea
-                      value={newHttpProfile.headersText} rows={2}
-                      placeholder={'Authorization: Bearer xxxxx\nX-Api-Key: yyyyy'}
-                      onChange={(e) => setNewHttpProfile({ ...newHttpProfile, headersText: e.target.value })}
-                      style={{ marginBottom: 6 }}
-                    />
-                    <a onClick={() => void addHttpProfile()}>등록</a>
-                  </Form.Item>
-                )}
+                {httpProfileSelect}
               </>
             ) : (
               <>
