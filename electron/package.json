@@ -2,7 +2,7 @@
   "name": "desktop",
   "productName": "PE Dashboard",
   "private": true,
-  "version": "0.26.0",
+  "version": "0.27.0",
   "description": "PE Dashboard desktop app",
   "main": "dist/main.cjs",
   "scripts": {
