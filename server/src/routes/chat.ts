@@ -24,8 +24,11 @@ export function chatRoutes(app: FastifyInstance, chatService: ChatAdapter): void
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
     });
-    const emit = (e: ChatEvent | { type: 'done' }) =>
+    // 클라이언트가 소켓을 닫은 뒤 쓰면 "write after end"류 오류가 난다 — 종료된 스트림엔 쓰지 않는다.
+    const emit = (e: ChatEvent | { type: 'done' }) => {
+      if (reply.raw.writableEnded) return;
       reply.raw.write(`data: ${JSON.stringify(e)}\n\n`);
+    };
 
     // 클라이언트가 스트림을 끊으면(새 메시지 전송·드로어 닫기) 진행 중인 AI 실행을 중단
     const abort = new AbortController();
@@ -37,7 +40,7 @@ export function chatRoutes(app: FastifyInstance, chatService: ChatAdapter): void
       emit({ type: 'error', message: (e as Error).message } as ChatEvent);
     } finally {
       emit({ type: 'done' });
-      reply.raw.end();
+      if (!reply.raw.writableEnded) reply.raw.end();
     }
   });
 }

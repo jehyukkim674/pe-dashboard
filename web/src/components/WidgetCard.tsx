@@ -73,18 +73,23 @@ export default function WidgetCard({ widget, onRemove, onChangeRefresh, onEdit, 
       ? !result.ok
       : !!rule.pattern && (result.stdout + result.stderr).includes(rule.pattern);
     if (matched && !alertedRef.current) {
-      if (Notification.permission === 'default') void Notification.requestPermission();
-      if (Notification.permission === 'denied') {
-        warnNotificationDenied();
-      } else {
+      if (Notification.permission === 'granted') {
         new Notification(`PE Dashboard — ${widget.title}`, {
           body: rule.on === 'fail'
             ? (result.error ?? '명령이 실패했습니다')
             : `출력에 "${rule.pattern}" 가 포함되었습니다`,
         });
+        alertedRef.current = true;
+      } else if (Notification.permission === 'denied') {
+        warnNotificationDenied();
+        alertedRef.current = true;
+      } else {
+        // 권한 미결정: 요청만 하고 alertedRef는 그대로 둔다 → 권한 허용 후 다음 폴링에서 실제 발송
+        void Notification.requestPermission();
       }
+    } else {
+      alertedRef.current = matched; // 조건 해제(false) 시 리셋, 이미 알린 상태면 유지
     }
-    alertedRef.current = matched;
   }, [result, widget.alert, widget.title]);
 
   // 실패해도 직전 정상 데이터를 계속 보여주고, 에러는 상단의 컴팩트 배너로 알린다

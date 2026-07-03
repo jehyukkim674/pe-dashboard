@@ -1,5 +1,20 @@
 import { describe, it, expect } from 'vitest';
-import { orderColumns, parseIsoTimestamp, readTablePrefs, statusColor } from '../src/components/widgets/tableFormat';
+import { compare, orderColumns, parseIsoTimestamp, readTablePrefs, statusColor } from '../src/components/widgets/tableFormat';
+
+describe('compare (컬럼 정렬)', () => {
+  it('양쪽 유한 수면 수치 비교', () => {
+    expect(compare({ n: '2' }, { n: '10' }, 'n')).toBeLessThan(0); // 2 < 10 (문자열이면 '10'<'2')
+    expect(compare({ n: 5 }, { n: 5 }, 'n')).toBe(0);
+  });
+  it('숫자가 아니면 문자열 비교', () => {
+    expect(compare({ s: 'apple' }, { s: 'banana' }, 's')).toBeLessThan(0);
+  });
+  it("'Infinity'/'NaN' 문자열은 수치로 오인하지 않고 문자열 비교", () => {
+    // Infinity로 오인하면 수치 비교가 되어 순서가 깨진다 — 문자열 비교로 안정적이어야 한다
+    expect(compare({ v: 'Infinity' }, { v: 'Alpha' }, 'v')).toBeGreaterThan(0); // 'I' > 'A'
+    expect(Number.isNaN(compare({ v: 'NaN' }, { v: 'zzz' }, 'v'))).toBe(false);
+  });
+});
 
 describe('statusColor', () => {
   it('maps common status words to colors (case-insensitive)', () => {

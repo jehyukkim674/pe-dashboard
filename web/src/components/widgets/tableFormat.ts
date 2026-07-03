@@ -5,11 +5,12 @@ export function valueAt(row: Record<string, unknown>, dotted: string): unknown {
   return getPath(row, dotted);
 }
 
-// 컬럼 클릭 정렬: 양쪽 다 숫자면 수치 비교, 아니면 문자열 비교
+// 컬럼 클릭 정렬: 양쪽 다 유한한 수면 수치 비교, 아니면 문자열 비교.
+// Number.isFinite로 판정해 'Infinity'/'NaN' 같은 문자열이 수치로 오인돼 정렬을 깨뜨리지 않게 한다.
 export function compare(a: Record<string, unknown>, b: Record<string, unknown>, key: string): number {
   const [va, vb] = [valueAt(a, key), valueAt(b, key)];
   const [na, nb] = [Number(va), Number(vb)];
-  if (!Number.isNaN(na) && !Number.isNaN(nb) && va !== '' && vb !== '') return na - nb;
+  if (Number.isFinite(na) && Number.isFinite(nb) && va !== '' && vb !== '') return na - nb;
   return String(va ?? '').localeCompare(String(vb ?? ''));
 }
 
