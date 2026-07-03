@@ -110,6 +110,12 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
       .join(' ');
   }, [template, params]);
 
+  // Postgres 쿼리의 {name} 플레이스홀더 → 위젯 파라미터 입력으로 (CLI와 동일 방식, 서버에서 $N 바인딩)
+  const pgParamNames = useMemo(
+    () => [...new Set([...pgQuery.matchAll(/\{(\w+)\}/g)].map((m) => m[1]))],
+    [pgQuery],
+  );
+
   const buildDisplay = (): Record<string, unknown> | undefined => {
     const rp = rowsPath.trim() ? { rowsPath: rowsPath.trim() } : {};
     switch (type) {
@@ -158,8 +164,12 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
       } else {
         if (!pgProfile) return void message.warning('Postgres 프로필을 선택하세요');
         if (!/^\s*(select|with)\b/i.test(pgQuery)) return void message.warning('SELECT/WITH 쿼리만 가능합니다');
+        const missing = pgParamNames.filter((p) => !params[p]?.trim());
+        if (missing.length > 0) return void message.warning(`파라미터를 입력하세요: ${missing.join(', ')}`);
+        const pgParams: Record<string, string> = {};
+        for (const p of pgParamNames) pgParams[p] = params[p].trim();
         draft.dataSource = {
-          kind: 'postgres', commandId: '', params: {},
+          kind: 'postgres', commandId: '', params: pgParams,
           profile: pgProfile, query: pgQuery.trim(), refreshSec: ds?.refreshSec,
         };
       }
@@ -295,12 +305,21 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
                     <a onClick={() => void addProfile()}>등록</a>
                   </Form.Item>
                 )}
-                <Form.Item label="SELECT 쿼리" required>
+                <Form.Item label="SELECT 쿼리 (파라미터는 {이름}, 값은 $N으로 안전 바인딩)" required>
                   <Input.TextArea
                     rows={3} value={pgQuery} onChange={(e) => setPgQuery(e.target.value)}
-                    placeholder="SELECT status, count(*) FROM jobs GROUP BY status"
+                    placeholder="SELECT status, count(*) FROM jobs WHERE env = {env} GROUP BY status"
                   />
                 </Form.Item>
+                {pgParamNames.map((p) => (
+                  <Form.Item key={p} label={`파라미터: ${p}`} required>
+                    <Input
+                      value={params[p] ?? ''}
+                      onChange={(e) => setParams((prev) => ({ ...prev, [p]: e.target.value }))}
+                      placeholder={`{${p}} 값`}
+                    />
+                  </Form.Item>
+                ))}
               </>
             )}
           </>
