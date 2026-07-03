@@ -4,6 +4,7 @@ import { ArrowDownOutlined, ArrowUpOutlined } from '@ant-design/icons';
 import type { CommandResult } from '../../types';
 import type { StatDisplay } from './widgetTypes';
 import { getPath } from '../../utils/json';
+import { asRows } from '../../utils/commandResult';
 
 // 추세선에 보관하는 최근 수치 개수 (위젯당 localStorage ~1KB)
 const MAX_POINTS = 40;
@@ -52,9 +53,14 @@ export default function StatWidget({ result, display, widgetId, updatedAt }: {
   const d = (display ?? {}) as StatDisplay;
   let value: unknown = '—';
   if (result?.json !== undefined) {
-    if (d.metric === 'path' && d.path) value = getPath(result.json, d.path);
-    else if (Array.isArray(result.json)) value = result.json.length;
-    else value = JSON.stringify(result.json).slice(0, 30);
+    if (d.metric === 'path' && d.path) {
+      value = getPath(result.json, d.path);
+    } else {
+      // count: 최상위 배열뿐 아니라 중첩 배열({items:[...]})·rowsPath도 개수로 센다
+      const countRows = asRows(result, d.rowsPath);
+      const hasArray = Array.isArray(result.json) || countRows.length > 0 || d.rowsPath !== undefined;
+      value = hasArray ? countRows.length : JSON.stringify(result.json).slice(0, 30);
+    }
   } else if (result) {
     value = result.stdout.trim().split('\n')[0] || '—';
   }

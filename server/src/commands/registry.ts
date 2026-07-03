@@ -48,6 +48,72 @@ const BUILTIN: CommandTemplate[] = [
     params: ['port'],
     builtin: true,
   },
+  // --- Kubernetes (kubectl -o json → {items:[...]}; table/status는 행 경로 자동감지) ---
+  {
+    id: 'kubectl_get_pods',
+    description: 'Kubernetes 파드 목록 (JSON). namespace 지정. table/status 위젯은 행 경로 items 자동 인식',
+    argv: ['kubectl', 'get', 'pods', '-n', '{namespace}', '-o', 'json'],
+    params: ['namespace'],
+    builtin: true,
+  },
+  {
+    id: 'kubectl_get_nodes',
+    description: 'Kubernetes 노드 목록 (JSON)',
+    argv: ['kubectl', 'get', 'nodes', '-o', 'json'],
+    params: [],
+    builtin: true,
+  },
+  {
+    id: 'kubectl_get_events',
+    description: 'Kubernetes 이벤트 목록 (JSON). namespace 지정',
+    argv: ['kubectl', 'get', 'events', '-n', '{namespace}', '-o', 'json'],
+    params: ['namespace'],
+    builtin: true,
+  },
+  // --- Docker / AWS / GCP / Terraform ---
+  {
+    id: 'docker_containers',
+    description: '실행 중인 도커 컨테이너 (텍스트 표) — log 위젯 권장',
+    argv: ['docker', 'ps'],
+    params: [],
+    builtin: true,
+  },
+  {
+    id: 'aws_caller_identity',
+    description: '현재 AWS 자격증명 주체 (JSON) — stat(path=Account) 등',
+    argv: ['aws', 'sts', 'get-caller-identity'],
+    params: [],
+    builtin: true,
+  },
+  {
+    id: 'gcloud_instances',
+    description: 'GCP Compute 인스턴스 목록 (JSON 배열)',
+    argv: ['gcloud', 'compute', 'instances', 'list', '--format', 'json'],
+    params: [],
+    builtin: true,
+  },
+  {
+    id: 'terraform_state_list',
+    description: 'Terraform state의 리소스 목록 (텍스트). dir = 프로젝트 경로',
+    argv: ['terraform', '-chdir={dir}', 'state', 'list'],
+    params: ['dir'],
+    builtin: true,
+  },
+  // --- GitLab (glab) / Jira (jira-cli) ---
+  {
+    id: 'glab_mr_list',
+    description: 'GitLab Merge Request 목록 (JSON). repo는 OWNER/REPO',
+    argv: ['glab', 'mr', 'list', '-R', '{repo}', '-F', 'json'],
+    params: ['repo'],
+    builtin: true,
+  },
+  {
+    id: 'jira_issue_list',
+    description: 'Jira 이슈 목록 (텍스트) — jira-cli 설정 필요. log 위젯 권장',
+    argv: ['jira', 'issue', 'list', '--plain'],
+    params: [],
+    builtin: true,
+  },
 ];
 
 // 주의: 이 정규식은 선행 대시(--flag)를 막지 못한다. 옵션 주입 방어는

@@ -89,7 +89,8 @@ export default function TableWidget({ result, display, onDisplayChange }: {
   display?: Record<string, unknown>;
   onDisplayChange?: (display: Record<string, unknown>) => void;
 }) {
-  const rows = useMemo(() => asRows(result), [result]);
+  const rowsPath = typeof display?.rowsPath === 'string' ? display.rowsPath : undefined;
+  const rows = useMemo(() => asRows(result, rowsPath), [result, rowsPath]);
   const rawCols = display?.columns;
   const baseColumns = useMemo<string[]>(
     () =>

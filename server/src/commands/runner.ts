@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import type { CommandResult } from '../types.js';
 import { logCommand, maskSecrets } from './auditLog.js';
 import { diagnose } from './diagnose.js';
+import { commandLimiter } from './limiter.js';
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_BUFFER = 4 * 1024 * 1024;
@@ -16,6 +17,15 @@ export function runArgv(
       ok: false, exitCode: null, stdout: '', stderr: '', error: 'argv가 비어 있습니다.',
     });
   }
+  // 전역 동시 실행 상한을 통과해야 실제로 스폰된다 (초과분은 큐에서 대기)
+  return commandLimiter.run(() => execArgv(argv, timeoutMs, signal));
+}
+
+function execArgv(
+  argv: string[],
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<CommandResult> {
   const startedAt = Date.now();
   return new Promise((resolve) => {
     execFile(

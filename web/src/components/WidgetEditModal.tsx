@@ -48,6 +48,8 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
   const [chartYKey, setChartYKey] = useState(display.yKey ?? '');
   const [chartType, setChartType] = useState(display.chartType ?? 'line');
   const [textContent, setTextContent] = useState(display.content ?? '');
+  // 중첩 배열({items:[...]}) 응답에서 행 배열의 점 경로. 비우면 자동 감지(items/data/results/rows/list)
+  const [rowsPath, setRowsPath] = useState(display.rowsPath ?? '');
   // 조건 알림
   const [alertOn, setAlertOn] = useState<'none' | WidgetAlert['on']>(widget?.alert?.on ?? 'none');
   const [alertPattern, setAlertPattern] = useState(widget?.alert?.pattern ?? '');
@@ -109,9 +111,10 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
   }, [template, params]);
 
   const buildDisplay = (): Record<string, unknown> | undefined => {
+    const rp = rowsPath.trim() ? { rowsPath: rowsPath.trim() } : {};
     switch (type) {
       case 'stat':
-        return { metric: statMetric, ...(statMetric === 'path' && { path: statPath }), suffix: statSuffix };
+        return { metric: statMetric, ...(statMetric === 'path' && { path: statPath }), suffix: statSuffix, ...rp };
       case 'table': {
         const columns = tableColumns.split(',').map((c) => c.trim()).filter(Boolean);
         // 폭·필터·정렬·숨김 등 사용자 설정은 편집 모달을 거쳐도 유지한다
@@ -121,12 +124,12 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
             if (widget.display?.[key] != null) prefs[key] = widget.display[key];
           }
         }
-        return { ...(columns.length > 0 && { columns }), ...prefs };
+        return { ...(columns.length > 0 && { columns }), ...prefs, ...rp };
       }
       case 'chart':
-        return { xKey: chartXKey, yKey: chartYKey, chartType };
+        return { xKey: chartXKey, yKey: chartYKey, chartType, ...rp };
       case 'status':
-        return { labelPath: statusLabelPath, statePath: statusStatePath, okValues: statusOkValues };
+        return { labelPath: statusLabelPath, statePath: statusStatePath, okValues: statusOkValues, ...rp };
       case 'text':
         return { content: textContent };
       default:
@@ -303,6 +306,11 @@ export default function WidgetEditModal({ widget, onClose, onSave }: Props) {
           </>
         )}
 
+        {['stat', 'table', 'chart', 'status'].includes(type) && (
+          <Form.Item label="행 경로 (선택 — 응답이 중첩 배열일 때. 비우면 items/data/results 자동 감지)">
+            <Input value={rowsPath} onChange={(e) => setRowsPath(e.target.value)} placeholder="예: items (kubectl -o json)" />
+          </Form.Item>
+        )}
         {type === 'stat' && (
           <>
             <Form.Item label="표시 값">

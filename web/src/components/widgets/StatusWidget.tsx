@@ -9,7 +9,7 @@ export default function StatusWidget({ result, display }: {
   display?: Record<string, unknown>;
 }) {
   const d = (display ?? {}) as StatusDisplay;
-  const rows = asRows<unknown>(result);
+  const rows = asRows<unknown>(result, d.rowsPath);
   if (!d.labelPath || !d.statePath) return <div>상태 그리드 설정(labelPath/statePath)이 필요합니다</div>;
   if (rows.length === 0) return <div>데이터 없음</div>;
 

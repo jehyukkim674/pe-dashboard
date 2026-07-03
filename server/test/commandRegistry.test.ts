@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { CommandRegistry } from '../src/commands/registry.js';
+import { CommandRegistry, validateTemplate } from '../src/commands/registry.js';
 
 describe('CommandRegistry', () => {
   let registry: CommandRegistry;
@@ -18,6 +18,28 @@ describe('CommandRegistry', () => {
     expect(ids).toContain('gh_run_list');
     expect(ids).toContain('argocd_app_list');
     expect(ids).toContain('port_check');
+  });
+
+  it('신규 빌트인이 목록에 있고, 모든 빌트인이 검증·안전 규칙을 통과한다', () => {
+    const ids = registry.list().map((t) => t.id);
+    for (const id of ['kubectl_get_pods', 'kubectl_get_nodes', 'kubectl_get_events',
+      'docker_containers', 'aws_caller_identity', 'gcloud_instances', 'terraform_state_list',
+      'glab_mr_list', 'jira_issue_list']) {
+      expect(ids).toContain(id);
+    }
+    // 모든 빌트인이 validateTemplate(placeholder 선언 + safety)를 통과해야 한다 — 읽기전용·안전
+    for (const t of registry.list()) {
+      expect(() => validateTemplate(t), t.id).not.toThrow();
+    }
+  });
+
+  it('신규 빌트인의 파라미터 치환이 올바르다', () => {
+    expect(registry.buildArgv('kubectl_get_pods', { namespace: 'default' }))
+      .toEqual(['kubectl', 'get', 'pods', '-n', 'default', '-o', 'json']);
+    expect(registry.buildArgv('terraform_state_list', { dir: '/Users/me/proj' }))
+      .toEqual(['terraform', '-chdir=/Users/me/proj', 'state', 'list']);
+    expect(registry.buildArgv('glab_mr_list', { repo: 'org/repo' }))
+      .toContain('org/repo');
   });
 
   it('손상된(배열 아님) commands.json이어도 list()가 죽지 않고 builtin만 반환한다', async () => {

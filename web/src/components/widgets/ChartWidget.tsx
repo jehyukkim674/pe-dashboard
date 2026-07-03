@@ -32,7 +32,7 @@ export default function ChartWidget({ result, display }: {
 }) {
   const { token } = theme.useToken();
   const d = (display ?? {}) as ChartDisplay;
-  const data = asRows(result);
+  const data = asRows(result, d.rowsPath);
   const yKeys = parseYKeys(d.yKey);
   if (!d.xKey || yKeys.length === 0) return <div>차트 설정(xKey/yKey)이 필요합니다</div>;
 

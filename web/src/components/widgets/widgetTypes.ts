@@ -28,6 +28,8 @@ export const DEFAULT_WIDGET_SIZE = Object.fromEntries(
 
 // 타입별 display 옵션 shape — 렌더러와 편집 모달이 공유하는 표시 설정의 단일 정의.
 // (display는 AI도 채울 수 있는 느슨한 JSON이라 모든 필드가 optional.)
-export interface StatDisplay { metric?: 'count' | 'path'; path?: string; suffix?: string; }
-export interface StatusDisplay { labelPath?: string; statePath?: string; okValues?: string; }
-export interface ChartDisplay { xKey?: string; yKey?: string | string[]; chartType?: 'line' | 'bar'; }
+// rowsPath: 응답 JSON에서 행 배열이 중첩돼 있을 때 그 점 경로(예: kubectl은 'items'). 비우면 자동 감지.
+export interface StatDisplay { metric?: 'count' | 'path'; path?: string; suffix?: string; rowsPath?: string; }
+export interface StatusDisplay { labelPath?: string; statePath?: string; okValues?: string; rowsPath?: string; }
+export interface ChartDisplay { xKey?: string; yKey?: string | string[]; chartType?: 'line' | 'bar'; rowsPath?: string; }
+export interface TableDisplay { columns?: string[]; rowsPath?: string; }
