@@ -97,6 +97,17 @@ describe('routes', () => {
     expect(res.json().error).toMatch(/kind/);
   });
 
+  it('잘못된 형식의 id는 500이 아닌 404를 준다', async () => {
+    // store.filePath가 던지는 invalid-id 예외가 500으로 새지 않아야 한다 ('!'는 [\w-] 밖)
+    for (const method of ['GET', 'PUT', 'DELETE'] as const) {
+      const res = await app.inject({
+        method, url: '/api/dashboards/bad!id',
+        ...(method === 'PUT' ? { payload: { name: 'x', widgets: [] } } : {}),
+      });
+      expect(res.statusCode).toBe(404);
+    }
+  });
+
   it('PUT /api/dashboards/:id rejects malformed body with 400 and does not corrupt store', async () => {
     const created = await app.inject({ method: 'POST', url: '/api/dashboards', payload: { name: '원본' } });
     const { id } = created.json();

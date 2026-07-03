@@ -125,7 +125,9 @@ export class ClaudeCliAdapter implements ChatAdapter {
         continue; // 결과를 반영해 다음 라운드로
       }
 
-      const operations = parsed.operations ?? [];
+      // parsed.operations가 배열이 아니면(모델이 잘못된 형태를 낼 수 있음) 빈 배열로 취급해
+      // applyOperations의 for-of가 TypeError로 죽지 않게 한다.
+      const operations = Array.isArray(parsed.operations) ? parsed.operations : [];
       if (this.deps.readOnly && operations.length > 0) {
         emit({ type: 'error', message: '조회 전용 모드라 변경 작업은 적용하지 않았습니다.' });
       } else {

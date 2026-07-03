@@ -38,7 +38,16 @@ export async function applyOperations(
   );
   const pendingIdByCommand = new Map<string, string>();
 
-  for (const operation of operations) {
+  // register_command를 먼저 처리한다. 등록 요청보다 위젯 작업이 앞서 오면(모델 출력 순서)
+  // pendingId가 아직 없어 보류에 실패하고 즉시 실행 → 'unknown command'로 죽고 승인해도
+  // 복구되지 않는다. 먼저 등록해 pendingId를 확보하면 뒤따르는 의존 작업이 보류된다.
+  // register 외 작업의 상대 순서는 유지되므로 create_dashboard→add_widget($last)도 그대로 동작한다.
+  const ordered = [
+    ...operations.filter((op) => op.op === 'register_command'),
+    ...operations.filter((op) => op.op !== 'register_command'),
+  ];
+
+  for (const operation of ordered) {
     // 이번 응답에서 등록 요청된 명령에 의존하는 작업 → 승인 후 적용으로 보류
     const dependsOn = commandIdOf(operation);
     if (dependsOn && requestedCommands.has(dependsOn) && pending) {

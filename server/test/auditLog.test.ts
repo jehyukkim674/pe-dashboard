@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { configureAuditLog, logCommand, readAuditLog, maskSecrets } from '../src/commands/auditLog.js';
+import { configureAuditLog, logCommand, readAuditLog, maskSecrets, maskArgv } from '../src/commands/auditLog.js';
 
 describe('maskSecrets', () => {
   it('env형(token=…)·Bearer 토큰을 가린다', () => {
@@ -24,6 +24,29 @@ describe('maskSecrets', () => {
   it('비밀값이 없으면 원문을 보존한다(분류 단서 유지)', () => {
     const s = 'error: context "ns-oss-cmdb" not found';
     expect(maskSecrets(s)).toBe(s);
+  });
+
+  it('+ / = 가 든 base64/불투명 토큰도 끝까지 가린다', () => {
+    // 이전 [\w.-]+ 값 클래스는 +,/,= 에서 멈춰 뒷부분이 샜다
+    expect(maskSecrets('token=Abc123+def/ghi==')).toBe('token=***');
+    const masked = maskSecrets('{"api_key":"a/b+c=d"}');
+    expect(masked).not.toContain('a/b+c=d');
+    expect(masked).not.toContain('/b+c=d');
+  });
+});
+
+describe('maskArgv', () => {
+  it('비밀 플래그 다음 인자 값을 통째로 가린다', () => {
+    expect(maskArgv(['argocd', 'login', '--auth-token', 'SECRET123'])).toEqual(
+      ['argocd', 'login', '--auth-token', '***'],
+    );
+    expect(maskArgv(['mysql', '-p', 'hunter2', 'db'])).toEqual(['mysql', '-p', '***', 'db']);
+  });
+  it('한 인자에 든 key=value 형태 비밀값도 가린다', () => {
+    expect(maskArgv(['tool', '--token=Abc+/=='])).toEqual(['tool', '--token=***']);
+  });
+  it('비밀이 아닌 인자는 그대로 둔다', () => {
+    expect(maskArgv(['gh', 'run', 'list', '--repo', 'a/b'])).toEqual(['gh', 'run', 'list', '--repo', 'a/b']);
   });
 });
 

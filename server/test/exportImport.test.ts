@@ -76,4 +76,25 @@ describe('export/import routes', () => {
     const res = await app.inject({ method: 'POST', url: '/api/import', payload: { foo: 1 } });
     expect(res.statusCode).toBe(400);
   });
+
+  it('잘못된 항목이 섞여도 500 없이 정상 항목만 가져오고 나머지는 건너뛴다', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/api/import',
+      payload: {
+        dashboards: [
+          { id: 'good-1', name: '정상', widgets: [] },
+          { id: 'bad/id', name: '잘못된 id', widgets: [] }, // store.save가 던지지만 전체를 죽이면 안 됨
+          { id: 'good-2', name: '정상2', widgets: [] },
+        ],
+        commands: [null, { id: 'ok_cmd', description: 'd', argv: ['echo', 'x'], params: [] }],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { dashboards: number; commands: number; skipped: string[] };
+    expect(body.dashboards).toBe(2); // good-1, good-2
+    expect(body.commands).toBe(1);
+    expect(await store.get('good-1')).toBeDefined();
+    expect(await store.get('good-2')).toBeDefined();
+    expect(body.skipped.join()).toMatch(/bad\/id|잘못된 명령/);
+  });
 });

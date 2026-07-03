@@ -16,20 +16,24 @@ export default function StatusWidget({ result, display }: {
   const okSet = new Set(
     (d.okValues ?? '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean),
   );
+  // okValues가 설정되지 않았으면 정상/이상을 판정할 수 없다. 이때 모든 타일을 빨강으로
+  // 칠하면 '전체 장애'라는 잘못된 신호가 되므로, 판정 불가는 중립(회색)으로 표시한다.
+  const configured = okSet.size > 0;
 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
       {rows.map((row, i) => {
         const label = String(getPath(row, d.labelPath!) ?? `#${i + 1}`);
         const state = String(getPath(row, d.statePath!) ?? '?');
-        const ok = okSet.size === 0 ? false : okSet.has(state.toLowerCase());
+        const ok = okSet.has(state.toLowerCase());
+        const background = !configured ? '#8c8c8c' : ok ? '#52c41a' : '#ff4d4f';
         return (
           <div
             key={`${label}-${i}`}
-            title={`${label}: ${state}`}
+            title={configured ? `${label}: ${state}` : `${label}: ${state} (okValues 미설정 — 판정 불가)`}
             style={{
               padding: '6px 10px', borderRadius: 6, fontSize: 12, lineHeight: 1.3,
-              color: '#fff', background: ok ? '#52c41a' : '#ff4d4f',
+              color: '#fff', background,
               maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}
           >

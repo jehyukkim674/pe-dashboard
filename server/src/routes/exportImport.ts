@@ -35,6 +35,10 @@ export function exportImportRoutes(
     let importedCommands = 0;
     const skipped: string[] = [];
     for (const template of bundle.commands ?? []) {
+      if (!template || typeof template.id !== 'string') {
+        skipped.push('잘못된 명령 항목(무시됨)');
+        continue;
+      }
       if (commands.get(template.id)) continue;
       try {
         await commands.register({ ...template, builtin: false });
@@ -44,12 +48,17 @@ export function exportImportRoutes(
       }
     }
 
-    // 대시보드는 id 기준 덮어쓰기(upsert) — 같은 id를 다시 가져오면 최신 내용으로 갱신
+    // 대시보드는 id 기준 덮어쓰기(upsert) — 같은 id를 다시 가져오면 최신 내용으로 갱신.
+    // 항목 하나가 잘못돼도(잘못된 id 등) 전체 요청을 500으로 죽이지 않고 건너뛴다.
     let importedDashboards = 0;
     for (const dashboard of bundle.dashboards ?? []) {
       if (!dashboard?.id || !dashboard.name || !Array.isArray(dashboard.widgets)) continue;
-      await store.save(dashboard);
-      importedDashboards++;
+      try {
+        await store.save(dashboard);
+        importedDashboards++;
+      } catch (e) {
+        skipped.push(`대시보드 ${dashboard.id}: ${(e as Error).message}`);
+      }
     }
 
     return { dashboards: importedDashboards, commands: importedCommands, skipped };

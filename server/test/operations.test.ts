@@ -13,6 +13,7 @@ describe('applyOperations', () => {
   let toolkit: ToolKit;
   let store: DashboardStore;
   let pending: PendingCommands;
+  let commands: CommandRegistry;
   let events: ChatEvent[];
   const emit = (e: ChatEvent) => events.push(e);
 
@@ -20,7 +21,7 @@ describe('applyOperations', () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'ops-'));
     store = new DashboardStore(path.join(dir, 'dashboards'));
     await store.init();
-    const commands = new CommandRegistry(path.join(dir, 'commands.json'));
+    commands = new CommandRegistry(path.join(dir, 'commands.json'));
     await commands.load();
     pending = new PendingCommands();
     toolkit = buildTools({ store, commands, pending });
@@ -68,6 +69,37 @@ describe('applyOperations', () => {
     const confirm = events.find((e) => e.type === 'confirm_request');
     expect(confirm).toBeDefined();
     expect(pending.peek((confirm as { pendingId: string }).pendingId)?.id).toBe('k_ctx');
+  });
+
+  it('의존 위젯 작업이 register_command보다 먼저 와도 보류되고 승인 시 적용된다', async () => {
+    // 모델이 위젯 작업을 등록 요청보다 먼저 낸 순서. 이전에는 pendingId가 아직 없어
+    // 즉시 실행 → 'unknown command'로 죽고 승인해도 복구되지 않았다.
+    const ops: Operation[] = [
+      { op: 'create_dashboard', name: '배포' },
+      {
+        op: 'add_widget', dashboardId: '$last',
+        widget: {
+          type: 'stat', title: 'ctx', layout: { x: 0, y: 0, w: 3, h: 2 },
+          dataSource: { kind: 'cli', commandId: 'k_ctx', params: {} },
+        },
+      },
+      { op: 'register_command', id: 'k_ctx', description: 'ctx', argv: ['kubectl', 'config', 'current-context'], params: [] },
+    ];
+    await applyOperations(ops, toolkit, emit, pending);
+
+    // 'unknown command' 오류 없이 위젯은 보류됐고, 즉시 반영된 위젯은 0개여야 한다
+    expect(events.some((e) => e.type === 'error')).toBe(false);
+    const dash = (await store.list())[0];
+    expect(dash.widgets).toHaveLength(0);
+
+    // 승인(register + deferred 적용)하면 위젯이 실제로 추가된다
+    const confirm = events.find((e) => e.type === 'confirm_request') as { pendingId: string };
+    const entry = pending.get(confirm.pendingId)!;
+    expect(entry.deferred).toHaveLength(1);
+    // confirm 라우트와 동일하게: 템플릿을 실제 등록한 뒤 보류 작업을 적용한다
+    await commands.register(entry.template);
+    await applyOperations(entry.deferred as Operation[], toolkit, emit);
+    expect((await store.list())[0].widgets).toHaveLength(1);
   });
 
   it('emits error for unknown op without crashing', async () => {
