@@ -4,7 +4,7 @@ import { createWriteStream, writeFileSync, promises as fs } from 'node:fs';
 import https from 'node:https';
 import os from 'node:os';
 import path from 'node:path';
-import { buildSwapScript, pickArm64ZipUrl, type GithubRelease } from './update-helpers.js';
+import { buildSwapScript, pickArm64ZipUrl, sameVersion, type GithubRelease } from './update-helpers.js';
 
 const RELEASE_API = 'https://api.github.com/repos/jehyukkim674/pe-dashboard/releases/latest';
 
@@ -39,9 +39,17 @@ async function fetchLatestRelease(): Promise<GithubRelease> {
 }
 
 // 릴리스 zip을 받아 압축 해제하고 새 .app 경로를 반환한다. 진행률 0~100을 콜백으로 보낸다.
-export async function downloadUnsigned(onProgress: (percent: number) => void): Promise<string> {
+// expectedVersion을 주면 실제로 받는 릴리스 태그가 그것과 같은지 검증한다 — 체크 이후 새 릴리스가
+// 게시되면 모달에 표시·동의한 버전과 다른 것이 설치될 수 있으므로 불일치 시 중단한다.
+export async function downloadUnsigned(
+  onProgress: (percent: number) => void,
+  expectedVersion?: string,
+): Promise<string> {
   onProgress(0);
   const release = await fetchLatestRelease();
+  if (expectedVersion && !sameVersion(release.tag_name, expectedVersion)) {
+    throw new Error(`릴리스 버전 불일치: 예상 ${expectedVersion}, 실제 ${release.tag_name ?? '(없음)'}`);
+  }
   const url = pickArm64ZipUrl(release);
 
   const tmp = path.join(os.tmpdir(), `pe-update-${release.tag_name ?? 'latest'}`);

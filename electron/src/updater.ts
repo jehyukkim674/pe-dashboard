@@ -11,7 +11,15 @@ autoUpdater.autoDownload = false; // 사용자가 [업데이트]를 눌러야 �
 const RELEASES_URL = 'https://github.com/jehyukkim674/pe-dashboard/releases/latest';
 
 export type UpdateCheck =
-  | { kind: 'available'; currentVersion: string; version: string; notes: string; canAutoInstall: boolean }
+  | {
+      kind: 'available';
+      currentVersion: string;
+      version: string;
+      notes: string;
+      canAutoInstall: boolean;
+      // squirrel(서명) 경로만 앱 종료 시 자동 적용된다. custom(미서명)은 '지금 재시작'에서만 교체된다.
+      autoApplyOnQuit: boolean;
+    }
   | { kind: 'latest'; currentVersion: string }
   | { kind: 'error'; message: string };
 
@@ -88,6 +96,7 @@ export async function checkUpdateStatus(): Promise<UpdateCheck> {
       version: info.version,
       notes: flattenNotes(info.releaseNotes),
       canAutoInstall: installStrategy() !== 'manual',
+      autoApplyOnQuit: installStrategy() === 'squirrel',
     };
   } catch (e) {
     return { kind: 'error', message: e instanceof Error ? e.message : String(e) };
@@ -98,18 +107,21 @@ export async function checkUpdateStatus(): Promise<UpdateCheck> {
 export async function startInstall(win: BrowserWindow): Promise<void> {
   const send = (percent: number) => win.webContents.send('updater:progress', percent);
 
-  if (installStrategy() === 'custom') {
-    // 미서명: 커스텀 다운로드+압축해제(교체는 restartToUpdate에서)
-    await downloadUnsigned(send);
-    return;
-  }
-
-  // 서명: electron-updater. 다운로드 전에 같은 세션의 체크 상태를 요구한다.
+  // 다운로드 전에 최신 릴리스가 여전히 현재보다 새 버전인지 확인한다(서명·미서명 공통).
   const result = await autoUpdater.checkForUpdates();
   const info = result?.updateInfo;
   if (!info || !isNewerVersion(info.version, app.getVersion())) {
     throw new Error('설치할 새 버전이 없습니다');
   }
+
+  if (installStrategy() === 'custom') {
+    // 미서명: 커스텀 다운로드+압축해제(교체는 restartToUpdate에서). 받는 릴리스가 방금 확인한 버전과
+    // 같은지 검증해, 체크 이후 새 릴리스가 나와 엉뚱한 버전이 설치되는 것을 막는다.
+    await downloadUnsigned(send, info.version);
+    return;
+  }
+
+  // 서명: electron-updater.
   autoUpdater.removeAllListeners('download-progress');
   autoUpdater.removeAllListeners('update-downloaded');
   autoUpdater.on('download-progress', (p) => send(Math.min(99, Math.round(p.percent))));

@@ -6,11 +6,15 @@ export interface HttpProfile {
 }
 
 function validateHttpProfile(profile: HttpProfile): void {
-  const headers = profile.headers ?? {};
+  const headers = profile.headers;
+  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) {
+    throw new Error('headers는 객체여야 합니다');
+  }
   if (Object.keys(headers).length === 0) throw new Error('헤더를 최소 1개 입력하세요');
   for (const [k, v] of Object.entries(headers)) {
-    // 헤더 이름은 토큰 문자만, 값에는 제어문자(CR/LF 인젝션) 금지
+    // 헤더 이름은 토큰 문자만, 값은 문자열이며 제어문자(CR/LF 인젝션) 금지
     if (!/^[\w-]+$/.test(k)) throw new Error(`잘못된 헤더 이름: ${k}`);
+    if (typeof v !== 'string') throw new Error(`헤더 값은 문자열이어야 합니다: ${k}`);
     if (/[\r\n]/.test(v)) throw new Error(`헤더 값에 줄바꿈이 포함될 수 없습니다: ${k}`);
   }
 }

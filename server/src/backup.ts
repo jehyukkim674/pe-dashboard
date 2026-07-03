@@ -7,6 +7,15 @@ import { writeJsonAtomic } from './jsonFile.js';
 const KEEP_BACKUPS = 7;
 const FILE_RE = /^backup-\d{4}-\d{2}-\d{2}\.json$/;
 
+// 로컬 시간대 기준 YYYY-MM-DD. toISOString은 UTC라 KST에선 백업 날짜가 오전 9시에 바뀌고
+// '7일' 보관도 UTC-일 기준이 된다 — 사용자 체감 날짜(로컬)에 맞춘다.
+export function localDateStamp(d = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 // 서버 시작 시 하루 1개 백업 스냅샷(export 번들과 같은 포맷)을 남기고
 // 오래된 것은 정리한다. 복구는 UI의 '가져오기'로 이 파일을 올리면 된다.
 export async function writeDailyBackup(
@@ -14,7 +23,7 @@ export async function writeDailyBackup(
   store: DashboardStore,
   commands: CommandRegistry,
 ): Promise<void> {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStamp();
   const file = path.join(dir, `backup-${today}.json`);
   await fs.mkdir(dir, { recursive: true });
   try {

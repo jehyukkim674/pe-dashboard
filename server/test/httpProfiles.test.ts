@@ -31,6 +31,11 @@ describe('HttpProfiles', () => {
     await expect(profiles.add({ name: 'z', headers: { 'X-A': 'v\r\nX-Evil: 1' } })).rejects.toThrow(/줄바꿈/);
   });
 
+  it('rejects non-string header values and non-object headers', async () => {
+    await expect(profiles.add({ name: 'a', headers: { A: 123 } as never })).rejects.toThrow(/문자열/);
+    await expect(profiles.add({ name: 'b', headers: 'nope' as never })).rejects.toThrow(/객체/);
+  });
+
   it('rejects duplicate and invalid names', async () => {
     await profiles.add({ name: 'dup', headers: { A: '1' } });
     await expect(profiles.add({ name: 'dup', headers: { A: '1' } })).rejects.toThrow(/already exists/);

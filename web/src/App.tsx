@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, ConfigProvider, Empty, Input, Layout, Menu, message, Modal, Popconfirm, Space, Tooltip, Typography, FloatButton, theme as antdTheme } from 'antd';
 import {
   BulbOutlined, CommentOutlined, CopyOutlined, DeleteOutlined, DownloadOutlined, EditOutlined,
@@ -67,8 +67,13 @@ export default function App() {
     });
   };
 
+  // ChatDrawer가 도구 실행마다 refresh를 연타하면 응답이 순서 뒤바뀌어 도착할 수 있다.
+  // 시퀀스 번호로 최신 요청의 응답만 반영해, 오래된 응답이 최신 상태를 덮어쓰는 것을 막는다.
+  const refreshSeq = useRef(0);
   const refresh = useCallback(async (selectId?: string) => {
+    const seq = ++refreshSeq.current;
     const list = await api.listDashboards();
+    if (seq !== refreshSeq.current) return; // 더 최신 refresh가 진행 중 → 이 응답은 버린다
     setDashboards(list);
     setSelectedId((prev) => {
       const target = selectId ?? prev;
@@ -77,7 +82,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh().catch((e) => void message.error(`목록 조회 실패: ${(e as Error).message}`));
   }, [refresh]);
 

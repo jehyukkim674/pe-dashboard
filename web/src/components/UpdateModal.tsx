@@ -118,7 +118,9 @@ export default function UpdateModal({ manualCheckCount }: Props) {
       )}
       {canAuto && downloaded && (
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          다운로드 완료 — 지금 재시작하면 새 버전으로 전환됩니다. 나중에 앱을 종료해도 자동 적용됩니다.
+          {update?.autoApplyOnQuit
+            ? '다운로드 완료 — 지금 재시작하면 새 버전으로 전환됩니다. 나중에 앱을 종료해도 자동 적용됩니다.'
+            : '다운로드 완료 — 지금 재시작해야 새 버전으로 전환됩니다. (그냥 종료하면 적용되지 않습니다)'}
         </Typography.Text>
       )}
     </Modal>

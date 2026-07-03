@@ -2,7 +2,32 @@ import { describe, it, expect } from 'vitest';
 import { classifyBundlePath } from '../src/update-helpers.js';
 import { pickArm64ZipUrl } from '../src/update-helpers.js';
 import { buildSwapScript } from '../src/update-helpers.js';
-import { parseShellPath, sanitizeWindowBounds } from '../src/update-helpers.js';
+import { parseShellPath, sanitizeWindowBounds, sameVersion } from '../src/update-helpers.js';
+
+describe('sameVersion', () => {
+  it('선행 v 유무만 다르면 같은 버전', () => {
+    expect(sameVersion('v0.26.0', '0.26.0')).toBe(true);
+    expect(sameVersion('0.26.0', '0.26.0')).toBe(true);
+  });
+  it('다른 버전은 false, 빈 값도 false', () => {
+    expect(sameVersion('v0.26.0', '0.27.0')).toBe(false);
+    expect(sameVersion(undefined, '0.26.0')).toBe(false);
+    expect(sameVersion('', '')).toBe(false);
+  });
+});
+
+describe('buildSwapScript 안전한 교체 순서', () => {
+  const script = buildSwapScript({ pid: 123, srcApp: '/tmp/new/PE.app', destApp: '/Applications/PE.app' });
+  it('기존 번들을 지우기 전에 옆으로 치운다(rm 먼저 아님) + 실패 시 복구', () => {
+    // 예전 'rm -rf dest && mv' 순서가 아니라 mv(dest→.old) 후 교체여야 한다
+    expect(script).not.toMatch(/rm -rf '\/Applications\/PE\.app' &&/);
+    expect(script).toContain(`mv '/Applications/PE.app' '/Applications/PE.app.old'`);
+    expect(script).toContain(`mv '/Applications/PE.app.old' '/Applications/PE.app'`); // 복구 경로
+  });
+  it('새 번들 준비 실패 시 즉시 종료', () => {
+    expect(script).toContain('|| exit 1');
+  });
+});
 
 describe('parseShellPath', () => {
   it('센티널 사이의 PATH만 뽑는다(앞의 배너·경고 무시)', () => {

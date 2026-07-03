@@ -6,6 +6,7 @@ export interface UpdateCheckPayload {
   notes?: string;
   message?: string;
   canAutoInstall?: boolean; // false면 서명 안 된 빌드 — 자동 설치 불가, 수동 다운로드 안내
+  autoApplyOnQuit?: boolean; // true(서명 빌드)만 종료 시 자동 적용. false면 '지금 재시작'에서만 교체
 }
 
 declare global {

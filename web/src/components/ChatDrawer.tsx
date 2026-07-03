@@ -97,6 +97,10 @@ export default function ChatDrawer({
   }, [items]);
 
   useEffect(() => {
+    // 스트리밍 중에는 토큰마다 items가 바뀌어 전체 내역을 매번 직렬화·저장하는 낭비가 크다.
+    // 진행 중(streaming) 버블이 있으면 저장을 건너뛰고, 스트리밍이 끝난 확정 상태에서만 저장한다.
+    const last = items[items.length - 1];
+    if (last?.kind === 'assistant' && last.streaming) return;
     localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(-HISTORY_MAX)));
   }, [items]);
 

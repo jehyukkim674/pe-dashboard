@@ -102,7 +102,16 @@ function isFree(port: number): Promise<boolean> {
 
 async function listenWithFallback(app: FastifyInstance, preferred: number): Promise<number> {
   const target = preferred !== 0 && (await isFree(preferred)) ? preferred : 0;
-  await app.listen({ port: target, host: '127.0.0.1' });
+  try {
+    await app.listen({ port: target, host: '127.0.0.1' });
+  } catch (e) {
+    // isFree 확인과 listen 사이(TOCTOU)에 포트를 뺏기면 EADDRINUSE로 죽는다 — 임의 포트로 폴백한다
+    if ((e as NodeJS.ErrnoException).code === 'EADDRINUSE' && target !== 0) {
+      await app.listen({ port: 0, host: '127.0.0.1' });
+    } else {
+      throw e;
+    }
+  }
   const address = app.server.address();
   return typeof address === 'object' && address ? address.port : preferred;
 }

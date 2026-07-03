@@ -13,6 +13,12 @@ export function classifyBundlePath(bundlePath: string, isWritable: boolean): 'cu
 export interface GithubAsset { name: string; browser_download_url: string }
 export interface GithubRelease { tag_name?: string; assets: GithubAsset[] }
 
+// 'v0.26.0' 과 '0.26.0' 처럼 선행 v만 다른 것을 같은 버전으로 본다.
+export function sameVersion(a: string | undefined, b: string | undefined): boolean {
+  const norm = (v?: string) => (v ?? '').replace(/^v/, '').trim();
+  return norm(a) !== '' && norm(a) === norm(b);
+}
+
 // arm64 mac zip 에셋의 다운로드 URL을 고른다(.blockmap 제외).
 export function pickArm64ZipUrl(release: GithubRelease): string {
   const asset = release.assets.find(
@@ -60,14 +66,30 @@ function shellQuote(s: string): string {
 }
 
 // 우리 프로세스 종료를 기다렸다가 번들을 교체·재실행하는 bash 스크립트를 만든다.
+// 교체 순서가 중요하다: 기존 번들을 지우기 전에 새 번들을 먼저 준비하고, 기존 번들은
+// '옆으로 치웠다가'(mv) 새 번들이 제자리에 들어간 뒤에만 삭제한다. 중간에 실패하면
+// 원래 번들을 복구한다 — 예전 'rm 먼저' 방식은 교체 도중 실패 시 앱이 반파된 채 남았다.
 export function buildSwapScript(opts: { pid: number; srcApp: string; destApp: string }): string {
   const src = shellQuote(opts.srcApp);
   const dest = shellQuote(opts.destApp);
   const destNew = shellQuote(`${opts.destApp}.new`);
+  const destOld = shellQuote(`${opts.destApp}.old`);
   return [
     '#!/bin/bash',
     `while kill -0 ${opts.pid} 2>/dev/null; do sleep 0.2; done`,
-    `/usr/bin/ditto ${src} ${destNew} && rm -rf ${dest} && mv ${destNew} ${dest}`,
+    `rm -rf ${destNew} ${destOld}`,
+    // 새 번들을 .new로 준비 (실패하면 아무것도 건드리지 않고 종료)
+    `/usr/bin/ditto ${src} ${destNew} || exit 1`,
+    // 기존 번들을 .old로 치우고 새 번들을 제자리에. 실패하면 원상복구.
+    `if mv ${dest} ${destOld}; then`,
+    `  if mv ${destNew} ${dest}; then`,
+    `    rm -rf ${destOld}`,
+    `  else`,
+    `    mv ${destOld} ${dest}; exit 1`,
+    `  fi`,
+    `else`,
+    `  exit 1`,
+    `fi`,
     `/usr/bin/xattr -dr com.apple.quarantine ${dest} 2>/dev/null || true`,
     `/usr/bin/open ${dest}`,
     '',

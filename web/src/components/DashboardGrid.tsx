@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, message } from 'antd';
 import { PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import RGL, { WidthProvider } from 'react-grid-layout/legacy';
@@ -30,11 +30,19 @@ export default function DashboardGrid({ dashboard, onChanged, onAnalyze }: Props
     setTimeout(() => setHighlightId((cur) => (cur === id ? undefined : cur)), 2500);
   };
 
+  // 각 편집의 기준이 되는 최신 위젯 목록. dashboard prop은 저장 후 refresh가 끝나야 갱신되므로,
+  // 그 사이 두 번째 편집이 stale한 prop을 기준으로 계산하면 첫 편집을 조용히 되돌린다.
+  // 저장 시 낙관적으로 ref를 갱신해 연속 편집이 항상 최신 상태 위에 쌓이게 한다.
+  const widgetsRef = useRef(dashboard.widgets);
+  useEffect(() => { widgetsRef.current = dashboard.widgets; }, [dashboard]);
+
   // 위젯 변경을 대시보드 전체 저장으로 영속화하는 공통 경로 (저장→재동기화→실패 시 에러 토스트).
-  const saveWidgets = (widgets: Widget[], failMsg: string, afterSave?: () => void) =>
-    api.saveDashboard({ ...dashboard, widgets })
+  const saveWidgets = (widgets: Widget[], failMsg: string, afterSave?: () => void) => {
+    widgetsRef.current = widgets; // 낙관적 갱신: 다음 편집이 이 결과를 기준으로 하게 한다
+    return api.saveDashboard({ ...dashboard, widgets })
       .then(() => { onChanged(); afterSave?.(); })
       .catch((e) => void message.error(`${failMsg}: ${(e as Error).message}`));
+  };
   const layout = useMemo<RglItem[]>(
     () => dashboard.widgets.map((w) => ({ i: w.id, ...w.layout })),
     [dashboard],
@@ -44,13 +52,14 @@ export default function DashboardGrid({ dashboard, onChanged, onAnalyze }: Props
   // 알려진 경쟁 조건: AI 채팅이 동시에 위젯을 추가하면 이 전체-저장이 그 변경을 덮어쓸 수 있다
   // (로컬 단일 사용자 도구라 허용; refresh가 직후 상태를 재동기화).
   const handleLayoutChange = (next: readonly RglItem[]) => {
+    const base = widgetsRef.current;
     const moved = next.some((item) => {
-      const w = dashboard.widgets.find((x) => x.id === item.i);
+      const w = base.find((x) => x.id === item.i);
       return w && (w.layout.x !== item.x || w.layout.y !== item.y ||
         w.layout.w !== item.w || w.layout.h !== item.h);
     });
     if (!moved) return;
-    const widgets = dashboard.widgets.map((w) => {
+    const widgets = base.map((w) => {
       const item = next.find((x) => x.i === w.id);
       return item ? { ...w, layout: { x: item.x, y: item.y, w: item.w, h: item.h } } : w;
     });
@@ -58,11 +67,11 @@ export default function DashboardGrid({ dashboard, onChanged, onAnalyze }: Props
   };
 
   const removeWidget = (widgetId: string) => {
-    void saveWidgets(dashboard.widgets.filter((w) => w.id !== widgetId), '위젯 삭제 실패');
+    void saveWidgets(widgetsRef.current.filter((w) => w.id !== widgetId), '위젯 삭제 실패');
   };
 
   const changeRefresh = (widgetId: string, refreshSec?: number) => {
-    const widgets = dashboard.widgets.map((w) =>
+    const widgets = widgetsRef.current.map((w) =>
       w.id === widgetId && w.dataSource
         ? { ...w, dataSource: { ...w.dataSource, refreshSec } }
         : w,
@@ -72,13 +81,13 @@ export default function DashboardGrid({ dashboard, onChanged, onAnalyze }: Props
 
   // 위젯 내부 상호작용(컬럼 폭 조절 등)으로 바뀐 display만 저장
   const changeDisplay = (widgetId: string, display: Record<string, unknown>) => {
-    const widgets = dashboard.widgets.map((w) => (w.id === widgetId ? { ...w, display } : w));
+    const widgets = widgetsRef.current.map((w) => (w.id === widgetId ? { ...w, display } : w));
     void saveWidgets(widgets, '표시 설정 저장 실패');
   };
 
   // 편집: id·layout은 유지하고 나머지를 드래프트로 교체 (dataSource/alert 제거도 반영)
   const editWidget = (widgetId: string, draft: WidgetDraft) => {
-    const widgets = dashboard.widgets.map((w) =>
+    const widgets = widgetsRef.current.map((w) =>
       w.id === widgetId ? { id: w.id, layout: w.layout, ...draft } : w,
     );
     void saveWidgets(widgets, '위젯 수정 실패');
@@ -86,7 +95,7 @@ export default function DashboardGrid({ dashboard, onChanged, onAnalyze }: Props
 
   // 12컬럼 그리드에서 기존 위젯과 겹치지 않는 가장 위쪽 빈 자리를 찾는다 (없으면 맨 아래)
   const findFreePosition = (w: number, h: number): { x: number; y: number } => {
-    const occupied = dashboard.widgets.map((wg) => wg.layout);
+    const occupied = widgetsRef.current.map((wg) => wg.layout);
     const bottom = Math.max(0, ...occupied.map((l) => l.y + l.h));
     for (let y = 0; y <= bottom; y++) {
       for (let x = 0; x + w <= 12; x++) {
@@ -100,7 +109,7 @@ export default function DashboardGrid({ dashboard, onChanged, onAnalyze }: Props
   };
 
   const duplicateWidget = (widgetId: string) => {
-    const source = dashboard.widgets.find((w) => w.id === widgetId);
+    const source = widgetsRef.current.find((w) => w.id === widgetId);
     if (!source) return;
     const copy: Widget = {
       ...source,
@@ -108,7 +117,7 @@ export default function DashboardGrid({ dashboard, onChanged, onAnalyze }: Props
       title: `${source.title} (복사)`,
       layout: { ...findFreePosition(source.layout.w, source.layout.h), w: source.layout.w, h: source.layout.h },
     };
-    void saveWidgets([...dashboard.widgets, copy], '위젯 복제 실패', () => flashHighlight(copy.id));
+    void saveWidgets([...widgetsRef.current, copy], '위젯 복제 실패', () => flashHighlight(copy.id));
   };
 
   const addWidget = (draft: WidgetDraft) => {
@@ -118,7 +127,7 @@ export default function DashboardGrid({ dashboard, onChanged, onAnalyze }: Props
       layout: { ...findFreePosition(size.w, size.h), ...size },
       ...draft,
     };
-    void saveWidgets([...dashboard.widgets, widget], '위젯 추가 실패', () => flashHighlight(widget.id));
+    void saveWidgets([...widgetsRef.current, widget], '위젯 추가 실패', () => flashHighlight(widget.id));
   };
 
   return (
